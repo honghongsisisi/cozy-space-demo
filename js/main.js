@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.17';
-import { Avatar } from './avatar.js?v=0.17';
-import { Environment } from './environment.js?v=0.17';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.17';
-import { saveState, loadState } from './storage.js?v=0.17';
-import { Sound } from './sound.js?v=0.17';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.17';
-import { fmt } from './realtime.js?v=0.17';
-import { icon, fillIcons } from './icons.js?v=0.17';
-import { makeThumbnails } from './thumbs.js?v=0.17';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.18';
+import { Avatar } from './avatar.js?v=0.18';
+import { Environment } from './environment.js?v=0.18';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.18';
+import { saveState, loadState } from './storage.js?v=0.18';
+import { Sound } from './sound.js?v=0.18';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.18';
+import { fmt } from './realtime.js?v=0.18';
+import { icon, fillIcons } from './icons.js?v=0.18';
+import { makeThumbnails } from './thumbs.js?v=0.18';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -54,10 +54,19 @@ function updateCamera(dt) {
   const want2 = panelOpen && window.innerWidth > 900 ? panel.offsetWidth / 2 : 0;
   viewShift += (want2 - viewShift) * Math.min(1, dt * 5);
   const w = Math.max(1, viewport.clientWidth), h = Math.max(1, viewport.clientHeight);
-  if (Math.abs(viewShift) > 0.5) camera.setViewOffset(w, h, viewShift, 0, w, h);
+  // 휴대폰에서 키보드가 3D 화면 아래쪽을 가리는 동안: 캐릭터가 보이는 위쪽 가운데에 오도록 그림만 살짝 위로
+  let wantY = 0;
+  if (document.body.classList.contains('typing-m')) {
+    const r = viewport.getBoundingClientRect();
+    const kb = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--kb')) || 0;
+    const visBottom = Math.min(r.bottom, window.innerHeight - kb - 56);
+    wantY = Math.max(0, h / 2 - (visBottom - r.top) / 2);
+  }
+  viewShiftY += (wantY - viewShiftY) * Math.min(1, dt * 6);
+  if (Math.abs(viewShift) > 0.5 || Math.abs(viewShiftY) > 0.5) camera.setViewOffset(w, h, viewShift, viewShiftY, w, h);
   else if (camera.view && camera.view.enabled) camera.clearViewOffset();
 }
-let viewShift = 0;
+let viewShift = 0, viewShiftY = 0;
 
 // ---------- 저장 ----------
 let saveTimer = null;
@@ -729,6 +738,38 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') chatInput.blur();
 });
 chatInput.addEventListener('focus', () => keys.clear());
+
+// ---- 휴대폰: 키보드가 올라와도 3D 화면은 그대로, 채팅 입력줄만 키보드 위에 붙어 올라옴 (카카오톡처럼) ----
+// 원리: ① 화면 전체 높이를 키보드가 없을 때 크기로 '고정'해 두고(--app-h),
+// ② 키보드 높이(--kb) = 브라우저 창 높이 − 실제로 보이는 부분 높이 를 재서, 입력줄만 그만큼 위로 밀어 올립니다.
+// ③ 채팅 기록 창은 입력하는 동안에만 반투명하게 떠 있다가, 키보드를 내리면 천천히 사라집니다.
+const isPhone = () => window.matchMedia('(max-width: 900px)').matches;
+const rootEl = document.documentElement;
+function lockAppHeight() {
+  if (isPhone() && document.activeElement === chatInput) return; // 키보드가 떠 있는 동안에는 높이를 바꾸지 않음
+  rootEl.style.setProperty('--app-h', `${window.innerHeight}px`);
+}
+window.addEventListener('resize', lockAppHeight);
+lockAppHeight();
+const vv = window.visualViewport;
+function placeChatbar() {
+  if (!document.body.classList.contains('typing-m')) return;
+  const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  rootEl.style.setProperty('--kb', `${Math.round(kb)}px`);
+  if (window.scrollY) window.scrollTo(0, 0); // 브라우저가 화면을 끌어올리지 못하게
+}
+if (vv) { vv.addEventListener('resize', placeChatbar); vv.addEventListener('scroll', placeChatbar); }
+chatInput.addEventListener('focus', () => {
+  if (!isPhone()) return;
+  document.body.classList.add('typing-m');
+  placeChatbar();
+});
+chatInput.addEventListener('blur', () => {
+  document.body.classList.remove('typing-m');
+  rootEl.style.setProperty('--kb', '0px');
+});
+// 보내기 버튼을 눌러도 키보드가 내려가지 않게 (계속 이어서 말할 수 있게)
+document.getElementById('chat-send').addEventListener('pointerdown', (e) => { if (document.activeElement === chatInput) e.preventDefault(); });
 window.addEventListener('keydown', (e) => {
   // 화면에서 Enter를 누르면 바로 채팅 입력
   if (e.key === 'Enter' && document.activeElement !== chatInput && e.target.tagName !== 'INPUT') { e.preventDefault(); chatInput.focus(); }
