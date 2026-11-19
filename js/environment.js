@@ -1,0 +1,333 @@
+// 하늘·시간대·날씨·조명 연출
+import * as THREE from 'three';
+import { SKY_KEYS, PALETTE as P } from './palette.js';
+import { glowMat, fireMat } from './catalog.js';
+
+const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
+
+function canvasTex(size, draw) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export class Environment {
+  constructor(scene, world) {
+    this.scene = scene;
+    this.world = world;
+    this.time = 13;
+    this.weather = 'clear';
+    this.flowing = false;
+    this.cloudiness = 0; // 0~1, 날씨에 따라 천천히 바뀜
+
+    // 하늘 공 (위·아래 두 색 그라데이션)
+    this.skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } },
+      vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `uniform vec3 top; uniform vec3 bottom; varying vec3 vP;
+        void main(){ float h = clamp(vP.y * 1.6 + 0.05, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, pow(h, 0.8)), 1.0);
+        #include <colorspace_fragment>
+        }`,
+    });
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(450, 24, 16), this.skyMat);
+    scene.add(this.sky);
+    scene.fog = new THREE.Fog(0xffffff, 80, 380);
+
+    // 빛
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0xb5d98f, 1.2);
+    scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight(0xffffff, 2);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(1024, 1024);
+    const sc = this.sun.shadow.camera;
+    sc.left = sc.bottom = -14; sc.right = sc.top = 14; sc.near = 1; sc.far = 80;
+    this.sun.shadow.bias = -0.0008;
+    this.sun.shadow.normalBias = 0.03;
+    scene.add(this.sun, this.sun.target);
+
+    this.lampLights = [];
+    for (let i = 0; i < LIGHT_POOL; i++) {
+      const l = new THREE.PointLight(0xffb878, 0, 8, 1.8);
+      scene.add(l);
+      this.lampLights.push(l);
+    }
+
+    this.makeStars();
+    this.makeMoon();
+    this.makeBubbles();
+    this.makeClouds();
+    this.makeWeather();
+
+    this._c1 = new THREE.Color(); this._c2 = new THREE.Color();
+  }
+
+  makeStars() {
+    const n = 700, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const th = Math.random() * Math.PI * 2, ph = Math.random() * 1.3;
+      const r = 400;
+      pos[i * 3] = Math.cos(th) * Math.sin(ph) * r;
+      pos[i * 3 + 1] = Math.cos(ph) * r * 0.9 + 15;
+      pos[i * 3 + 2] = Math.sin(th) * Math.sin(ph) * r;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const tex = canvasTex(32, (ctx, s) => {
+      const gr = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, s, s);
+    });
+    this.starMat = new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, map: tex, transparent: true, depthWrite: false, fog: false });
+    this.stars = new THREE.Points(g, this.starMat);
+    this.scene.add(this.stars);
+  }
+
+  makeMoon() {
+    const tex = canvasTex(256, (ctx, s) => {
+      const c = s / 2;
+      const glow = ctx.createRadialGradient(c, c, s * 0.18, c, c, s * 0.5);
+      glow.addColorStop(0, 'rgba(255,250,235,0.5)'); glow.addColorStop(1, 'rgba(255,250,235,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, s, s);
+      // 초승달: 큰 원에서 옆 원을 빼기
+      ctx.fillStyle = '#fffbea';
+      ctx.beginPath(); ctx.arc(c, c, s * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath(); ctx.arc(c + s * 0.1, c - s * 0.07, s * 0.2, 0, Math.PI * 2); ctx.fill();
+    });
+    this.moonMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
+    this.moon = new THREE.Sprite(this.moonMat);
+    this.moon.scale.set(90, 90, 1);
+    this.scene.add(this.moon);
+  }
+
+  // 밤하늘에 둥둥 떠오르는 투명한 방울
+  makeBubbles() {
+    const tex = canvasTex(64, (ctx, s) => {
+      const c = s / 2;
+      const gr = ctx.createRadialGradient(c, c, s * 0.25, c, c, s * 0.48);
+      gr.addColorStop(0, 'rgba(255,255,255,0.05)'); gr.addColorStop(0.8, 'rgba(255,240,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(c, c, s * 0.48, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.ellipse(c - s * 0.15, c - s * 0.17, s * 0.08, s * 0.04, -0.7, 0, Math.PI * 2); ctx.fill();
+    });
+    this.bubbleMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 });
+    this.bubbles = [];
+    for (let i = 0; i < 18; i++) {
+      const b = new THREE.Sprite(this.bubbleMat);
+      const s = 0.4 + Math.random() * 0.8;
+      b.scale.set(s, s, 1);
+      b.userData = { a: Math.random() * Math.PI * 2, r: 4 + Math.random() * 14, y: Math.random() * 14, sp: 0.3 + Math.random() * 0.4 };
+      this.scene.add(b);
+      this.bubbles.push(b);
+    }
+  }
+
+  makeClouds() {
+    this.cloudRoot = new THREE.Group();
+    this.cloudMat = new THREE.MeshLambertMaterial({ color: P.cloud, flatShading: true, transparent: true, opacity: 0.92 });
+    const geo = new THREE.IcosahedronGeometry(1, 0);
+    for (let i = 0; i < 10; i++) {
+      const c = new THREE.Group();
+      const parts = 3 + (i % 3);
+      for (let j = 0; j < parts; j++) {
+        const m = new THREE.Mesh(geo, this.cloudMat);
+        const s = 4 + Math.random() * 4;
+        m.scale.set(s * 1.4, s * 0.7, s);
+        m.position.set(j * 5 - parts * 2.5, Math.random() * 2, Math.random() * 3);
+        c.add(m);
+      }
+      const a = (i / 10) * Math.PI * 2, d = 110 + Math.random() * 90;
+      c.position.set(Math.cos(a) * d, 30 + Math.random() * 25, Math.sin(a) * d);
+      c.lookAt(0, c.position.y, 0);
+      this.cloudRoot.add(c);
+    }
+    this.scene.add(this.cloudRoot);
+  }
+
+  makeWeather() {
+    // 비: 가는 선
+    const n = 1400;
+    const rp = new Float32Array(n * 6);
+    for (let i = 0; i < n; i++) {
+      const x = (Math.random() - 0.5) * 50, y = Math.random() * 25, z = (Math.random() - 0.5) * 50;
+      rp.set([x, y, z, x + 0.05, y - 0.7, z], i * 6);
+    }
+    const rg = new THREE.BufferGeometry();
+    rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
+    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xdfeaff, transparent: true, opacity: 0.55 }));
+    this.rain.visible = false;
+    this.rain.frustumCulled = false;
+    this.scene.add(this.rain);
+
+    // 눈·꽃잎: 점
+    const m = 900, fp = new Float32Array(m * 3);
+    this.flakeSeed = new Float32Array(m);
+    for (let i = 0; i < m; i++) {
+      fp.set([(Math.random() - 0.5) * 50, Math.random() * 25, (Math.random() - 0.5) * 50], i * 3);
+      this.flakeSeed[i] = Math.random() * 100;
+    }
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+    this.snowTex = canvasTex(32, (ctx, s) => {
+      const gr = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.8)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, s, s);
+    });
+    this.petalTex = canvasTex(32, (ctx, s) => {
+      ctx.fillStyle = '#ffc4d6';
+      ctx.beginPath(); ctx.ellipse(s / 2, s / 2, s * 0.42, s * 0.24, 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe3ec';
+      ctx.beginPath(); ctx.ellipse(s * 0.45, s * 0.45, s * 0.18, s * 0.08, 0.6, 0, Math.PI * 2); ctx.fill();
+    });
+    this.flakeMat = new THREE.PointsMaterial({ size: 0.28, map: this.snowTex, transparent: true, depthWrite: false });
+    this.flakes = new THREE.Points(fg, this.flakeMat);
+    this.flakes.visible = false;
+    this.flakes.frustumCulled = false;
+    this.scene.add(this.flakes);
+  }
+
+  setTime(t) { this.time = ((t % 24) + 24) % 24; }
+  setWeather(w) {
+    this.weather = w;
+    this.rain.visible = w === 'rain';
+    this.flakes.visible = w === 'snow' || w === 'petals';
+    if (w === 'snow') { this.flakeMat.map = this.snowTex; this.flakeMat.size = 0.25; }
+    if (w === 'petals') { this.flakeMat.map = this.petalTex; this.flakeMat.size = 0.35; }
+    this.flakeMat.needsUpdate = true;
+  }
+
+  sample() {
+    const t = this.time;
+    let i = 0;
+    while (i < SKY_KEYS.length - 2 && SKY_KEYS[i + 1].t <= t) i++;
+    const a = SKY_KEYS[i], b = SKY_KEYS[i + 1];
+    const k = (t - a.t) / (b.t - a.t);
+    return { a, b, k };
+  }
+
+  // 밤 정도 (0 = 낮, 1 = 깊은 밤)
+  nightness() {
+    const t = this.time;
+    if (t >= 7.5 && t <= 17.5) return 0;
+    if (t > 17.5 && t < 20) return (t - 17.5) / 2.5;
+    if (t >= 20 || t < 5) return 1;
+    return 1 - (t - 5) / 2.5;
+  }
+
+  update(dt, focus) {
+    if (this.flowing) this.setTime(this.time + dt * (24 / 180)); // 3분에 하루
+
+    const wantCloud = { clear: 0, cloudy: 0.75, rain: 1, snow: 0.6, petals: 0.1 }[this.weather];
+    this.cloudiness += (wantCloud - this.cloudiness) * Math.min(1, dt * 1.5);
+    const cl = this.cloudiness;
+    const night = this.nightness();
+
+    const { a, b, k } = this.sample();
+    const gray = this._c2.setHex(night > 0.5 ? 0x3b3f5c : 0xaeb6c2);
+    const top = this._c1.setHex(a.top).lerp(new THREE.Color(b.top), k).lerp(gray, cl * 0.6);
+    this.skyMat.uniforms.top.value.copy(top);
+    const bottom = new THREE.Color(a.bottom).lerp(new THREE.Color(b.bottom), k).lerp(gray, cl * 0.5);
+    this.skyMat.uniforms.bottom.value.copy(bottom);
+    this.scene.fog.color.copy(bottom);
+
+    // 물은 하늘색을 비춤
+    this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
+    this.world.ripples.material.opacity = 0.25 + (1 - night) * 0.3;
+
+    const sunI = (a.sunI + (b.sunI - a.sunI) * k) * (1 - cl * 0.55);
+    const ambI = (a.ambI + (b.ambI - a.ambI) * k) * (1 - cl * 0.2);
+    this.sun.color.setHex(a.sun).lerp(new THREE.Color(b.sun), k);
+    this.sun.intensity = sunI;
+    this.hemi.intensity = ambI;
+    this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.6);
+    this.hemi.groundColor.setHex(0x9fbf88).lerp(bottom, 0.3);
+
+    // 해(낮)·달(밤) 방향: 그림자가 너무 길어지지 않게 높이를 제한
+    const ang = ((this.time - 6) / 12) * Math.PI;
+    const isDay = night < 0.5;
+    const dir = isDay
+      ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.45, Math.sin(ang)), 0.5)
+      : new THREE.Vector3(-0.5, 0.8, -0.6);
+    dir.normalize();
+    this.sun.position.copy(dir).multiplyScalar(40);
+    this.sun.target.position.set(0, 0, 0);
+
+    // 달·별·방울
+    const clearNight = night * (1 - cl);
+    this.moonMat.opacity = clearNight;
+    this.moon.visible = clearNight > 0.01;
+    this.moon.position.copy(focus).add(new THREE.Vector3(-0.35, 0.42, -1).normalize().multiplyScalar(360));
+    this.starMat.opacity = clearNight * (0.75 + Math.sin(performance.now() / 700) * 0.15);
+    this.stars.visible = clearNight > 0.01;
+    this.stars.position.set(focus.x, 0, focus.z);
+    this.sky.position.copy(focus);
+
+    const tt = performance.now() / 1000;
+    this.bubbleMat.opacity = clearNight * 0.9;
+    this.bubbles.forEach((bb) => {
+      const u = bb.userData;
+      bb.visible = clearNight > 0.01;
+      if (!bb.visible) return;
+      u.y += dt * u.sp;
+      if (u.y > 16) u.y = 0;
+      bb.position.set(Math.cos(u.a + tt * 0.03) * u.r, 1 + u.y, Math.sin(u.a + tt * 0.03) * u.r);
+      bb.material.opacity = this.bubbleMat.opacity;
+    });
+
+    this.cloudMat.color.setHex(0xffffff).lerp(new THREE.Color(night > 0.5 ? 0x5a5f8a : 0xc8ced8), Math.max(cl, night * 0.8));
+    this.cloudRoot.rotation.y += dt * 0.004;
+
+    // 등불: 밤이나 흐린 날 켜짐
+    const lampOn = Math.min(1, night + cl * 0.5);
+    glowMat.color.setHex(0xf4ecd8).lerp(new THREE.Color(P.bulb).multiplyScalar(1.15), lampOn);
+    const flick = 0.9 + Math.sin(tt * 13) * 0.05 + Math.sin(tt * 7.3) * 0.05;
+    fireMat.color.setHex(P.fire).multiplyScalar(flick);
+    const sources = this.world.lightSources().sort((p, q) => p.distanceToSquared(focus) - q.distanceToSquared(focus));
+    this.lampLights.forEach((l, i) => {
+      const s = sources[i];
+      l.intensity = s ? lampOn * 5 : 0;
+      if (s) l.position.copy(s);
+    });
+    this.world.items.forEach(({ obj }) => {
+      obj.traverse((o) => { if (o.userData.flicker) o.scale.set(1, flick, 1); });
+    });
+
+    // 날씨 입자: 아바타 주변에서만 내림
+    if (this.rain.visible) {
+      const p = this.rain.geometry.attributes.position;
+      for (let i = 0; i < p.count; i += 2) {
+        let y = p.getY(i) - dt * 22;
+        if (y < -1) y += 25;
+        p.setY(i, y); p.setY(i + 1, y - 0.7);
+      }
+      p.needsUpdate = true;
+      this.rain.position.set(focus.x, 0, focus.z);
+    }
+    if (this.flakes.visible) {
+      const p = this.flakes.geometry.attributes.position;
+      const petals = this.weather === 'petals';
+      const fall = petals ? 1.4 : 1.8;
+      for (let i = 0; i < p.count; i++) {
+        const s = this.flakeSeed[i];
+        let y = p.getY(i) - dt * fall * (0.7 + (s % 1) * 0.6);
+        if (y < -0.5) y += 25;
+        p.setY(i, y);
+        p.setX(i, p.getX(i) + Math.sin(tt * (petals ? 1.6 : 0.8) + s) * dt * (petals ? 0.9 : 0.4));
+      }
+      p.needsUpdate = true;
+      this.flakes.position.set(focus.x, 0, focus.z);
+    }
+  }
+
+  serialize() { return { time: this.time, weather: this.weather, flowing: this.flowing }; }
+  restore(s) {
+    if (!s) return;
+    if (typeof s.time === 'number') this.setTime(s.time);
+    if (s.weather) this.setWeather(s.weather);
+    this.flowing = !!s.flowing;
+  }
+}
