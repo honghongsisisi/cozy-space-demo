@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.18';
-import { Avatar } from './avatar.js?v=0.18';
-import { Environment } from './environment.js?v=0.18';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.18';
-import { saveState, loadState } from './storage.js?v=0.18';
-import { Sound } from './sound.js?v=0.18';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.18';
-import { fmt } from './realtime.js?v=0.18';
-import { icon, fillIcons } from './icons.js?v=0.18';
-import { makeThumbnails } from './thumbs.js?v=0.18';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.19';
+import { Avatar } from './avatar.js?v=0.19';
+import { Environment } from './environment.js?v=0.19';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.19';
+import { saveState, loadState } from './storage.js?v=0.19';
+import { Sound } from './sound.js?v=0.19';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.19';
+import { fmt } from './realtime.js?v=0.19';
+import { icon, fillIcons } from './icons.js?v=0.19';
+import { makeThumbnails } from './thumbs.js?v=0.19';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -530,17 +530,11 @@ function updateTools() {
 // ---------- 시간·날씨 버튼 ----------
 const timeSeg = document.getElementById('time-seg');
 const weatherSeg = document.getElementById('weather-seg');
-const timeFlow = document.getElementById('time-flow');
-const timeFlowLabel = document.getElementById('time-flow-label');
 function refreshEnvButtons() {
   timeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on',
     b.dataset.time === 'real' ? env.realTime : (!env.realTime && !env.flowing && Math.abs(env.time - parseFloat(b.dataset.time)) < 0.01)));
-  // 현재 시간일 때: 버튼에는 '골랐다' 표시만. '시간이 흐르게'는 자리는 그대로 두고 흐리게만
-  timeFlowLabel.classList.toggle('dim', env.realTime);
-  timeFlow.disabled = env.realTime || role === 'guest';
-  timeFlowLabel.title = env.realTime ? '현재 시간을 쓰는 동안에는 저절로 흘러요' : '';
+  // 현재 시간일 때: 버튼에는 '골랐다' 표시만
   weatherSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', env.weather === b.dataset.weather));
-  timeFlow.checked = env.flowing;
 }
 timeSeg.addEventListener('click', (e) => {
   if (role === 'guest') return;
@@ -555,7 +549,7 @@ weatherSeg.addEventListener('click', (e) => {
   env.setWeather(b.dataset.weather);
   refreshEnvButtons(); scheduleSave();
 });
-timeFlow.addEventListener('change', () => { env.flowing = timeFlow.checked; if (env.flowing) env.realTime = false; refreshEnvButtons(); scheduleSave(); });
+env.flowing = false; // '시간이 흐르게'는 홍시 님 요청으로 뺐음 (예전에 켜 둔 섬도 멈춘 시간으로)
 refreshEnvButtons();
 
 // ---------- 주인 / 손님 ----------
@@ -655,7 +649,6 @@ btnReset.addEventListener('click', () => {
 });
 
 const help = document.getElementById('help');
-document.getElementById('btn-help').addEventListener('click', () => help.classList.remove('hidden'));
 document.getElementById('btn-help2').addEventListener('click', () => help.classList.remove('hidden'));
 document.getElementById('btn-help-close').addEventListener('click', () => {
   help.classList.add('hidden');

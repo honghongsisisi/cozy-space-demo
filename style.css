@@ -278,7 +278,7 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 5
   background: rgba(35, 30, 48, 0.42); color: #f7f3ff; border-radius: 10px; padding: 7px 10px; font-size: 12.5px; line-height: 1.55;
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
 }
-.chat-log:empty::before { content: '채팅 기록이 여기에 남아요'; opacity: 0.6; }
+.chat-log:empty { display: none; } /* 아직 아무 말도 안 했으면 기록 창도 안 보임 */
 .chat-line b { color: #dcd3ff; font-weight: 700; }
 .chat-time { opacity: 0.55; font-size: 11px; }
 .bubble-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
