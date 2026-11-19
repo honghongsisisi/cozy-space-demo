@@ -1,7 +1,7 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js';
-import { glowMat, fireMat } from './catalog.js';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.6';
+import { glowMat, fireMat } from './catalog.js?v=0.6';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 

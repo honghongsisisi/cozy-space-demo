@@ -176,6 +176,7 @@ button { cursor: pointer; }
 .ticker-text i { font-style: normal; color: var(--muted); margin: 0 18px; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 .ticker-event { color: var(--muted); white-space: nowrap; }
+.version { font-size: 11px; color: var(--muted); background: var(--card-2); padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 
 /* 공통 카드·창 */
 .overlay { position: fixed; inset: 0; z-index: 30; background: rgba(50, 40, 70, 0.35); display: grid; place-items: center; padding: 16px; }

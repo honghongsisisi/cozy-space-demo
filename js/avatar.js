@@ -1,11 +1,11 @@
 // 머리 큰 귀여운 아바타와 걷기·점프·인사 움직임
 import * as THREE from 'three';
-import { mat } from './catalog.js';
-import { PALETTE as P } from './palette.js';
-import { PLOT_RADIUS } from './world.js';
+import { mat } from './catalog.js?v=0.6';
+import { PALETTE as P } from './palette.js?v=0.6';
+import { PLOT_RADIUS } from './world.js?v=0.6';
 
 const SPEED = 4.2;     // 걷기 속도
-const RUN_SPEED = 8;   // 달리기 속도
+const RUN_SPEED = 10;  // 달리기 속도 (걷기의 약 2.4배)
 
 export class Avatar {
   constructor(scene) {
@@ -163,17 +163,17 @@ export class Avatar {
     const walking = this.moving && this.y === 0;
     const prevStep = Math.floor(this.walkT / Math.PI);
     const run = walking && this.running;
-    this.walkT += dt * (walking ? (run ? 14 : 9) : 0); // 달리면 발걸음(=발소리)도 빨라짐
+    this.walkT += dt * (walking ? (run ? 17 : 9) : 0); // 달리면 발걸음(=발소리)도 빨라짐
     // 발이 땅에 닿는 순간마다 발소리
     if (walking && Math.floor(this.walkT / Math.PI) !== prevStep && this.onStep) this.onStep();
-    const swing = walking ? Math.sin(this.walkT) * (run ? 0.95 : 0.5) : 0;
+    const swing = walking ? Math.sin(this.walkT) * (run ? 1.15 : 0.5) : 0;
     this.legL.rotation.x = lerp(this.legL.rotation.x, swing, 0.3);
     this.legR.rotation.x = lerp(this.legR.rotation.x, -swing, 0.3);
-    this.armL.rotation.x = lerp(this.armL.rotation.x, -swing * 0.8, 0.3);
+    this.armL.rotation.x = lerp(this.armL.rotation.x, -swing * (run ? 1.3 : 0.8), 0.35);
     // 달릴 때: 팔꿈치를 굽힌 듯 팔을 앞으로 모으고, 몸을 살짝 앞으로 숙임
     this.armL.rotation.z = lerp(this.armL.rotation.z, run ? -0.25 : -0.08, 0.2);
-    this.body.rotation.x = lerp(this.body.rotation.x, run ? 0.14 : 0, 0.15);
-    const bob = walking ? Math.abs(Math.sin(this.walkT)) * (run ? 0.11 : 0.06) : Math.sin(performance.now() / 600) * 0.012;
+    this.body.rotation.x = lerp(this.body.rotation.x, run ? 0.28 : 0, 0.15);
+    const bob = walking ? Math.abs(Math.sin(this.walkT)) * (run ? 0.18 : 0.06) : Math.sin(performance.now() / 600) * 0.012;
     this.body.position.y = this.y + bob;
     this.head.rotation.z = walking ? Math.sin(this.walkT) * 0.05 : 0;
 
@@ -183,8 +183,8 @@ export class Avatar {
       this.armR.rotation.x = lerp(this.armR.rotation.x, 0, 0.3);
       this.armR.rotation.z = lerp(this.armR.rotation.z, 2.7 + Math.sin(this.waveT * 14) * 0.3, 0.3);
     } else {
-      this.armR.rotation.z = lerp(this.armR.rotation.z, 0.08, 0.2);
-      this.armR.rotation.x = lerp(this.armR.rotation.x, swing * 0.8, 0.3);
+      this.armR.rotation.x = lerp(this.armR.rotation.x, swing * (run ? 1.3 : 0.8), 0.35);
+      this.armR.rotation.z = lerp(this.armR.rotation.z, run ? 0.25 : 0.08, 0.2);
     }
   }
 
