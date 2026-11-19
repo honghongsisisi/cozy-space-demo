@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.15';
-import { Avatar } from './avatar.js?v=0.15';
-import { Environment } from './environment.js?v=0.15';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.15';
-import { saveState, loadState } from './storage.js?v=0.15';
-import { Sound } from './sound.js?v=0.15';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.15';
-import { fmt } from './realtime.js?v=0.15';
-import { icon, fillIcons } from './icons.js?v=0.15';
-import { makeThumbnails } from './thumbs.js?v=0.15';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.16';
+import { Avatar } from './avatar.js?v=0.16';
+import { Environment } from './environment.js?v=0.16';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.16';
+import { saveState, loadState } from './storage.js?v=0.16';
+import { Sound } from './sound.js?v=0.16';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.16';
+import { fmt } from './realtime.js?v=0.16';
+import { icon, fillIcons } from './icons.js?v=0.16';
+import { makeThumbnails } from './thumbs.js?v=0.16';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -617,15 +617,6 @@ function refreshSpaceInfo() {
 }
 world.onChange(() => { if (currentPane === 'space') refreshSpaceInfo(); });
 
-// 아래 소식줄 (지금은 고정 문구, 나중에 서버 소식으로)
-document.getElementById('ticker-text').innerHTML = [
-  '나의 작은 섬 데모에 오신 걸 환영해요',
-  '오른쪽 아이템 → 가구에서 섬을 꾸며 보세요',
-  '밤이 되면 등불이 켜지고 별이 떠요',
-  '마음에 드는 장면은 사진으로 남겨 보세요',
-  '실수했다면 Ctrl+Z로 되돌릴 수 있어요',
-  '친구 섬 놀러 가기는 다음 단계에서 열려요',
-].join('<i>·</i>');
 document.getElementById('btn-save').addEventListener('click', () => saveNow(true));
 
 // 소리

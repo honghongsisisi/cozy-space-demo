@@ -230,6 +230,7 @@ button { cursor: pointer; }
 .ticker-text i { font-style: normal; color: var(--muted); margin: 0 18px; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 .ticker-event { color: var(--muted); white-space: nowrap; }
+.rail .version { margin-top: auto; align-self: center; }
 .version { font-size: 11px; color: var(--muted); background: var(--card-2); padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
 
 /* 공통 카드·창 */
