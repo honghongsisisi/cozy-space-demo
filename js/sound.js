@@ -39,8 +39,8 @@ export class Sound {
   // 느낌: 창밖 나뭇잎과 처마에 떨어지는 부드러운 비. '쉬~' 하는 잡음은 아주 작게, 빗방울 하나하나가 들리게.
   // 원리: 8초짜리 빗소리를 미리 한 번 '그려서' 만들어 두고 끝없이 이어 틉니다.
   //  ① 잔빗방울: 아주 짧고 작은 '톡' 소리 수백 개 (나뭇잎에 스치는 비)
-  //  ② 잎사귀 방울: 맑은 '똑' (물방울처럼 음이 살짝 내려가는 소리) 가끔
-  //  ③ 처마 방울: 낮고 둥근 '툭' 아주 가끔
+  //  ② 잎사귀 방울: 부드러운 '투둑' 가끔 (음 높이가 없는 소리라 통통 튀지 않음)
+  //  ③ 처마 방울: 더 낮고 둥근 '툭' 아주 가끔
   //  ④ 바탕: 멀리서 들리는 먹먹한 비 (천천히 커졌다 작아졌다)
   // 빗방울 자리를 8초 안에서 돌려 붙여서, 이어 틀 때 이음새가 들리지 않습니다.
   setRain(on) {
@@ -80,28 +80,22 @@ export class Sound {
       let y = 0;
       for (let j = 0; j < dur; j++) { y += cut * ((rnd() * 2 - 1) - y); put(at + j, y * amp * Math.exp(-j / (dur * 0.3)), pan); }
     }
-    // ② 잎사귀 방울: 1초에 약 3개, 맑은 '똑' (음이 살짝 내려감)
-    for (let n = 0; n < 8 * 3; n++) {
-      const at = Math.floor(rnd() * len), f0 = 900 + rnd() * 1300, dur = Math.floor(sr * 0.06);
-      const amp = 0.05 + rnd() * 0.06, pan = rnd() * 1.4 - 0.7;
-      let ph = 0;
-      for (let j = 0; j < dur; j++) {
-        const t = j / sr, f = f0 * (1 - 0.35 * Math.min(1, t / 0.03));
-        ph += (2 * Math.PI * f) / sr;
-        const env = Math.min(1, t / 0.0015) * Math.exp(-t / 0.012);
-        put(at + j, Math.sin(ph) * env * amp, pan);
+    // ②③ 큰 빗방울: 음 높이가 들리지 않게(통통 튀지 않게) '잡음'을 낮게 두 번 걸러서 만든 부드럽고 둥근 '투둑'
+    const softDrop = (count, cutLo, cutHi, ampLo, ampHi, decay) => {
+      for (let n = 0; n < count; n++) {
+        const at = Math.floor(rnd() * len), dur = Math.floor(sr * decay * 5);
+        const cut = cutLo + rnd() * (cutHi - cutLo), amp = ampLo + rnd() * (ampHi - ampLo), pan = rnd() * 1.4 - 0.7;
+        let y1 = 0, y2 = 0;
+        for (let j = 0; j < dur; j++) {
+          const t = j / sr;
+          y1 += cut * ((rnd() * 2 - 1) - y1); y2 += cut * (y1 - y2);
+          const env = Math.min(1, t / 0.004) * Math.exp(-t / decay);
+          put(at + j, y2 * env * amp, pan);
+        }
       }
-    }
-    // ③ 처마 방울: 1초에 약 1개, 낮고 둥근 '툭'
-    for (let n = 0; n < 8; n++) {
-      const at = Math.floor(rnd() * len), f0 = 170 + rnd() * 120, dur = Math.floor(sr * 0.09);
-      const amp = 0.12 + rnd() * 0.08, pan = rnd() * 1.0 - 0.5;
-      let ph = 0;
-      for (let j = 0; j < dur; j++) {
-        const t = j / sr; ph += (2 * Math.PI * f0 * (1 - 0.2 * Math.min(1, t / 0.05))) / sr;
-        put(at + j, Math.sin(ph) * Math.min(1, t / 0.003) * Math.exp(-t / 0.022) * amp, pan);
-      }
-    }
+    };
+    softDrop(8 * 5, 0.05, 0.1, 0.25, 0.5, 0.016); // 잎에 떨어지는 방울: 1초에 약 5개
+    softDrop(8 * 1, 0.025, 0.045, 0.5, 0.8, 0.03); // 처마 방울: 1초에 약 1개, 더 낮고 둥글게
     const src = c.createBufferSource();
     src.buffer = buf; src.loop = true;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 0.5; // 날카로운 높은 소리는 걸러서 포근하게
