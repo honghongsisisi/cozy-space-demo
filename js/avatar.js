@@ -150,12 +150,17 @@ export class Avatar {
 
     // 점프
     this.vy -= 16 * dt;
+    const wasAir = this.y > 0;
     this.y = Math.max(0, this.y + this.vy * dt);
     if (this.y === 0) this.vy = 0;
+    if (wasAir && this.y === 0 && this.onStep) { this.onStep(); setTimeout(() => this.onStep && this.onStep(), 60); }
 
     // 걷는 모양
     const walking = this.moving && this.y === 0;
+    const prevStep = Math.floor(this.walkT / Math.PI);
     this.walkT += dt * (walking ? 9 : 0);
+    // 발이 땅에 닿는 순간마다 발소리
+    if (walking && Math.floor(this.walkT / Math.PI) !== prevStep && this.onStep) this.onStep();
     const swing = walking ? Math.sin(this.walkT) * 0.5 : 0;
     this.legL.rotation.x = lerp(this.legL.rotation.x, swing, 0.3);
     this.legR.rotation.x = lerp(this.legR.rotation.x, -swing, 0.3);

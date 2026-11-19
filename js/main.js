@@ -4,6 +4,7 @@ import { Avatar } from './avatar.js';
 import { Environment } from './environment.js';
 import { ITEMS, ITEM_BY_TYPE, buildItem } from './catalog.js';
 import { saveState, loadState, clearState } from './storage.js';
+import { Sound } from './sound.js';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -384,6 +385,14 @@ refreshEnvButtons();
 document.getElementById('btn-wave').addEventListener('click', () => avatar.wave());
 document.getElementById('btn-save').addEventListener('click', () => saveNow(true));
 
+// 소리
+const sound = new Sound();
+avatar.onStep = () => sound.footstep();
+const btnSound = document.getElementById('btn-sound');
+function refreshSoundBtn() { btnSound.textContent = sound.enabled ? '🔊' : '🔇'; }
+btnSound.addEventListener('click', () => { sound.setEnabled(!sound.enabled); refreshSoundBtn(); toast(sound.enabled ? '소리를 켰어요' : '소리를 껐어요'); });
+refreshSoundBtn();
+
 const btnReset = document.getElementById('btn-reset');
 let resetArmed = null;
 btnReset.addEventListener('click', () => {
@@ -491,4 +500,4 @@ frame();
 document.getElementById('loading').classList.add('done');
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, saveNow };
+window.cozy = { world, avatar, env, cam, saveNow, sound };
