@@ -36,13 +36,13 @@ export class Sound {
   }
 
   // ---- 빗소리 ----
-  // 원리: 2초짜리 '쏴아' 잡음을 끝없이 되풀이하고, 높은 소리를 깎아 멀리서 내리는 비처럼 부드럽게 만듦.
-  // 그 위에 아주 작은 '톡' 소리(빗방울)를 가끔씩 무작위로 섞음.
+  // 느낌: 방 안에 누워 있을 때 창밖에서 들리는 '툭… 툭툭' 빗방울.
+  // 원리: 드문드문 낮고 부드러운 '툭' 소리가 주인공이고, 바깥의 '쏴아' 소리는 벽 너머처럼 아주 작고 먹먹하게만 깔아 둠.
   setRain(on) {
     this.wantRain = on;
     if (!this.ctx) return;
     if (!this.rainGain) this.buildRain();
-    const target = on && this.enabled ? 0.55 : 0;
+    const target = on && this.enabled ? 0.3 : 0; // 발소리보다 작게
     if (this.rainTarget !== target) {
       this.rainTarget = target;
       this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
@@ -59,15 +59,20 @@ export class Sound {
     for (let i = 0; i < 2000; i++) { const k = i / 2000; d[i] = d[i] * k + d[len - 2000 + i] * (1 - k); }
     const src = c.createBufferSource();
     src.buffer = buf; src.loop = true;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
-    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 250;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; // 벽 너머처럼 먹먹하게
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 150;
+    const hiss = c.createGain(); hiss.gain.value = 0.12; // 배경 '쏴아'는 아주 작게
     this.rainGain = c.createGain(); this.rainGain.gain.value = 0;
-    src.connect(hp).connect(lp).connect(this.rainGain).connect(this.master);
+    this.rainGain.connect(this.master);
+    src.connect(hp).connect(lp).connect(hiss).connect(this.rainGain);
     src.start();
     this.rainTarget = 0;
     const drop = () => {
-      if (this.rainTarget > 0) this.droplet();
-      setTimeout(drop, 60 + Math.random() * 260);
+      if (this.rainTarget > 0) {
+        this.droplet();
+        if (Math.random() < 0.25) setTimeout(() => this.droplet(), 90 + Math.random() * 120); // 가끔 '툭툭'
+      }
+      setTimeout(drop, 250 + Math.random() * 700); // 드문드문
     };
     drop();
   }
@@ -75,14 +80,16 @@ export class Sound {
   droplet() {
     const c = this.ctx, t = c.currentTime;
     const src = c.createBufferSource(); src.buffer = this.noise;
-    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2500 + Math.random() * 3000; bp.Q.value = 3;
+    // 낮고 둥근 '툭': 중간 높이 소리만 남기고 짧게 사라지게
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700 + Math.random() * 900; bp.Q.value = 2.5;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
     const g = c.createGain();
-    const v = 0.05 + Math.random() * 0.08;
+    const v = 0.3 + Math.random() * 0.4;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(v, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    src.connect(bp).connect(g).connect(this.rainGain);
-    src.start(t, Math.random() * 0.9, 0.06);
+    g.gain.exponentialRampToValueAtTime(v, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    src.connect(bp).connect(lp).connect(g).connect(this.rainGain);
+    src.start(t, Math.random() * 0.9, 0.1);
   }
 
   setEnabled(on) {

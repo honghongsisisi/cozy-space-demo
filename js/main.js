@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.9';
-import { Avatar } from './avatar.js?v=0.9';
-import { Environment } from './environment.js?v=0.9';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.9';
-import { saveState, loadState, clearState } from './storage.js?v=0.9';
-import { Sound } from './sound.js?v=0.9';
-import { fmt } from './realtime.js?v=0.9';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.10';
+import { Avatar } from './avatar.js?v=0.10';
+import { Environment } from './environment.js?v=0.10';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.10';
+import { saveState, loadState, clearState } from './storage.js?v=0.10';
+import { Sound } from './sound.js?v=0.10';
+import { fmt } from './realtime.js?v=0.10';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
