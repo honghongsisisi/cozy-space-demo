@@ -297,13 +297,11 @@ kbd { display: inline-block; min-width: 20px; text-align: center; padding: 1px 5
   position: absolute; left: 10px; bottom: 52px; z-index: 4; width: 280px; background: var(--card); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: var(--shadow); padding: 12px; display: grid; gap: 10px;
 }
-.cs-preview { text-align: center; padding: 14px 0 10px; background: var(--card-2); border-radius: 10px; }
-.cs-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.cs-row > span { width: 44px; color: var(--muted); }
-.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
-.swatches button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
-.swatches button.on { outline: 2px solid var(--accent); outline-offset: 2px; }
-.font-list { display: flex; gap: 4px; flex-wrap: wrap; }
-.font-list button { border: 1px solid var(--line); background: #fff; border-radius: var(--r-btn); padding: 4px 8px; font-size: 13px; }
-.font-list button.on { border-color: var(--accent); background: var(--accent-soft); }
+.cs-title { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.cs-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cs-preset { border: 1.5px solid var(--line); background: var(--card-2); border-radius: 12px; padding: 12px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cs-preset:hover { border-color: #cfc6f0; }
+.cs-preset.on { border-color: var(--accent); background: var(--accent-soft); }
+.cs-preset em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.cs-preset.on em { color: var(--accent); font-weight: 700; }
 @media (max-width: 900px) { .chat-log { width: calc(100% - 20px); max-height: 100px; } .chat-btn span { display: none; } }

@@ -29,7 +29,7 @@
 - `vendor/`: 3D 그리기 도구 three.js (MIT 라이선스)
 
 ## 채팅 (지금은 혼자 써보기)
-- Enter로 입력, 보내면 머리 위 말풍선 + 왼쪽 아래 기록 창. '기록' 버튼으로 기록 창 보이기/숨기기, '꾸미기'로 말풍선 색·글자 색·글씨체 고르기.
+- Enter로 입력, 보내면 머리 위 말풍선 + 왼쪽 아래 기록 창. '기록' 버튼으로 기록 창 보이기/숨기기, '꾸미기'로 잘 어울리는 말풍선 조합 4가지(크림·벚꽃·풀잎·노을) 중 하나 고르기.
 - `js/chat.js`의 `LocalTransport`만 서버 연결로 바꾸면 친구에게도 보이게 됩니다.
 - 화면 글꼴: Pretendard (길형진, SIL Open Font License 1.1) — `vendor/pretendard`에 함께 담아 어느 컴퓨터에서나 같은 글꼴로 보여요.
 - 글씨체 출처 (모두 SIL Open Font License 1.1, 무료·상업적 사용 가능, Google Fonts): 고운돋움(Gowun Dodum, 류양희), 주아(Jua, 배달의민족 우아한형제들), 나눔손글씨 펜(Nanum Pen Script, 네이버).

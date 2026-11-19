@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.14';
-import { Avatar } from './avatar.js?v=0.14';
-import { Environment } from './environment.js?v=0.14';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.14';
-import { saveState, loadState } from './storage.js?v=0.14';
-import { Sound } from './sound.js?v=0.14';
-import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.14';
-import { fmt } from './realtime.js?v=0.14';
-import { icon, fillIcons } from './icons.js?v=0.14';
-import { makeThumbnails } from './thumbs.js?v=0.14';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.15';
+import { Avatar } from './avatar.js?v=0.15';
+import { Environment } from './environment.js?v=0.15';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.15';
+import { saveState, loadState } from './storage.js?v=0.15';
+import { Sound } from './sound.js?v=0.15';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.15';
+import { fmt } from './realtime.js?v=0.15';
+import { icon, fillIcons } from './icons.js?v=0.15';
+import { makeThumbnails } from './thumbs.js?v=0.15';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -755,31 +755,24 @@ function refreshChatLog() {
 }
 btnChatLog.addEventListener('click', () => { chat.logVisible = !chat.logVisible; chat.savePrefs(); refreshChatLog(); });
 refreshChatLog();
-// 말풍선 꾸미기
-const csPreview = document.getElementById('cs-preview');
+// 말풍선 꾸미기: 잘 어울리는 조합 4가지 중에서 하나만 고름 (선택지는 적게, 고르기는 쉽게)
+const csList = document.getElementById('cs-presets');
 function refreshChatStyle() {
-  const f = FONTS.find((x) => x.id === chat.style.font) || FONTS[0];
-  Object.assign(csPreview.style, { background: chat.style.bubble, color: chat.style.color, fontFamily: f.css, fontSize: `${13 * (f.scale || 1)}px` });
-  csPreview.style.setProperty('--bubble', chat.style.bubble);
-  document.querySelectorAll('#cs-bubble button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.bubble));
-  document.querySelectorAll('#cs-text button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.color));
-  document.querySelectorAll('#cs-font button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.font));
+  csList.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.preset));
 }
-function swatch(container, list, key) {
-  list.forEach((col) => {
-    const b = document.createElement('button');
-    b.dataset.v = col; b.style.background = col; b.title = col;
-    b.addEventListener('click', () => { chat.style[key] = col; chat.savePrefs(); refreshChatStyle(); });
-    container.appendChild(b);
-  });
-}
-swatch(document.getElementById('cs-bubble'), BUBBLE_COLORS, 'bubble');
-swatch(document.getElementById('cs-text'), TEXT_COLORS, 'color');
-FONTS.forEach((f) => {
+PRESETS.forEach((pr) => {
+  const f = FONTS.find((x) => x.id === pr.font) || FONTS[0];
   const b = document.createElement('button');
-  b.dataset.v = f.id; b.textContent = f.name; b.style.fontFamily = f.css;
-  b.addEventListener('click', () => { chat.style.font = f.id; chat.savePrefs(); refreshChatStyle(); });
-  document.getElementById('cs-font').appendChild(b);
+  b.className = 'cs-preset';
+  b.dataset.v = pr.id;
+  b.innerHTML = `<span class="speech static"></span><em></em>`;
+  const sp = b.querySelector('.speech');
+  sp.textContent = '안녕하세요!';
+  Object.assign(sp.style, { background: pr.bubble, color: pr.color, fontFamily: f.css, fontSize: `${13 * (f.scale || 1)}px` });
+  sp.style.setProperty('--bubble', pr.bubble);
+  b.querySelector('em').textContent = pr.name;
+  b.addEventListener('click', () => { chat.setPreset(pr.id); refreshChatStyle(); });
+  csList.appendChild(b);
 });
 const btnChatStyle = document.getElementById('btn-chatstyle');
 btnChatStyle.addEventListener('click', () => {

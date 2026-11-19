@@ -5,15 +5,20 @@ import * as THREE from 'three';
 
 const PREF_KEY = 'cozy-space-demo:chat';
 
-// 눈이 편한 말풍선 색 / 글자 색
-export const BUBBLE_COLORS = ['#fffdf7', '#fbe9ea', '#eef4e6', '#e8f0fa', '#f1ebfa', '#fdf3dc'];
-export const TEXT_COLORS = ['#4a4458', '#6b4f3f', '#3f5e4a', '#3f5170', '#7a4a66'];
 // 글씨체: 모두 SIL 오픈 폰트 라이선스(OFL) — 무료, 상업적 사용 가능 (Google Fonts에서 불러옴)
 export const FONTS = [
   { id: 'basic', name: '기본', css: '"Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
   { id: 'gowun', name: '고운돋움', css: '"Gowun Dodum", sans-serif' },
   { id: 'jua', name: '주아', css: '"Jua", sans-serif' },
   { id: 'pen', name: '손글씨', css: '"Nanum Pen Script", cursive', scale: 1.45 },
+];
+
+// 말풍선은 '잘 어울리는 조합' 4가지 중에서만 고름. 색은 따뜻하고 차분한 계열, 글씨는 읽기 쉬운 것만.
+export const PRESETS = [
+  { id: 'cream', name: '크림', bubble: '#fffdf7', color: '#4a4458', font: 'basic' },
+  { id: 'blossom', name: '벚꽃', bubble: '#fbe9ea', color: '#7a4a66', font: 'gowun' },
+  { id: 'leaf', name: '풀잎', bubble: '#eef4e6', color: '#3f5e4a', font: 'jua' },
+  { id: 'dusk', name: '노을', bubble: '#fdf0dc', color: '#6b4f3f', font: 'gowun' },
 ];
 
 // 지금은 내 화면에서만 되돌려 주는 '가짜 서버'
@@ -32,15 +37,27 @@ export class Chat {
     this.transport = new LocalTransport();
     this.transport.onMessage((m) => this.receive(m));
     this.bubbles = new Map(); // 말한 사람 id → 말풍선
-    this.style = { bubble: BUBBLE_COLORS[0], color: TEXT_COLORS[0], font: 'basic' };
+    this.preset = PRESETS[0].id;
     this.logVisible = true;
-    try { Object.assign(this, JSON.parse(localStorage.getItem(PREF_KEY) || '{}')); } catch (e) { /* 무시 */ }
+    try {
+      const saved = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+      if (typeof saved.logVisible === 'boolean') this.logVisible = saved.logVisible;
+      if (PRESETS.some((p) => p.id === saved.preset)) this.preset = saved.preset; // 예전 '따로 고르기' 설정은 크림으로
+    } catch (e) { /* 무시 */ }
+    this.setPreset(this.preset, false);
     this.log = document.getElementById('chat-log');
     this.layer = document.getElementById('bubble-layer');
   }
 
+  setPreset(id, save = true) {
+    const p = PRESETS.find((x) => x.id === id) || PRESETS[0];
+    this.preset = p.id;
+    this.style = { bubble: p.bubble, color: p.color, font: p.font };
+    if (save) this.savePrefs();
+  }
+
   savePrefs() {
-    try { localStorage.setItem(PREF_KEY, JSON.stringify({ style: this.style, logVisible: this.logVisible })); } catch (e) { /* 무시 */ }
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ preset: this.preset, logVisible: this.logVisible })); } catch (e) { /* 무시 */ }
   }
 
   send(text) {
