@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.20';
-import { Avatar } from './avatar.js?v=0.20';
-import { Environment } from './environment.js?v=0.20';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.20';
-import { saveState, loadState } from './storage.js?v=0.20';
-import { Sound } from './sound.js?v=0.20';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.20';
-import { fmt } from './realtime.js?v=0.20';
-import { icon, fillIcons } from './icons.js?v=0.20';
-import { makeThumbnails } from './thumbs.js?v=0.20';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.21';
+import { Avatar } from './avatar.js?v=0.21';
+import { Environment } from './environment.js?v=0.21';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.21';
+import { saveState, loadState } from './storage.js?v=0.21';
+import { Sound } from './sound.js?v=0.21';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.21';
+import { fmt } from './realtime.js?v=0.21';
+import { icon, fillIcons } from './icons.js?v=0.21';
+import { makeThumbnails } from './thumbs.js?v=0.21';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 

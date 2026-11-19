@@ -36,13 +36,18 @@ export class Sound {
   }
 
   // ---- 빗소리 ----
-  // 느낌: 방 안에 누워 있을 때 창밖에서 들리는 '툭… 툭툭' 빗방울.
-  // 원리: 드문드문 낮고 부드러운 '툭' 소리가 주인공이고, 바깥의 '쏴아' 소리는 벽 너머처럼 아주 작고 먹먹하게만 깔아 둠.
+  // 느낌: 창밖 나뭇잎과 처마에 떨어지는 부드러운 비. '쉬~' 하는 잡음은 아주 작게, 빗방울 하나하나가 들리게.
+  // 원리: 8초짜리 빗소리를 미리 한 번 '그려서' 만들어 두고 끝없이 이어 틉니다.
+  //  ① 잔빗방울: 아주 짧고 작은 '톡' 소리 수백 개 (나뭇잎에 스치는 비)
+  //  ② 잎사귀 방울: 맑은 '똑' (물방울처럼 음이 살짝 내려가는 소리) 가끔
+  //  ③ 처마 방울: 낮고 둥근 '툭' 아주 가끔
+  //  ④ 바탕: 멀리서 들리는 먹먹한 비 (천천히 커졌다 작아졌다)
+  // 빗방울 자리를 8초 안에서 돌려 붙여서, 이어 틀 때 이음새가 들리지 않습니다.
   setRain(on) {
     this.wantRain = on;
     if (!this.ctx) return;
     if (!this.rainGain) this.buildRain();
-    const target = on && this.enabled ? 0.3 : 0; // 발소리보다 작게
+    const target = on && this.enabled ? 0.55 : 0; // 발소리보다 작게
     if (this.rainTarget !== target) {
       this.rainTarget = target;
       this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
@@ -50,46 +55,62 @@ export class Sound {
   }
 
   buildRain() {
-    const c = this.ctx, len = c.sampleRate * 2;
-    const buf = c.createBuffer(1, len, c.sampleRate);
-    const d = buf.getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < len; i++) { last = last * 0.96 + (Math.random() * 2 - 1) * 0.2; d[i] = last; } // 부드러운 잡음
-    // 이어 붙이는 자리에서 '틱' 소리가 나지 않게 앞뒤를 살짝 겹쳐 줌
-    for (let i = 0; i < 2000; i++) { const k = i / 2000; d[i] = d[i] * k + d[len - 2000 + i] * (1 - k); }
+    const c = this.ctx, sr = c.sampleRate, len = sr * 8;
+    const buf = c.createBuffer(2, len, sr);
+    const L = buf.getChannelData(0), R = buf.getChannelData(1);
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const put = (i, v, pan) => { const k = ((i % len) + len) % len; L[k] += v * (1 - pan); R[k] += v * (1 + pan); };
+
+    // ④ 바탕: 두 번 낮게 거른 잡음 + 4초에 한 번 숨 쉬듯 크기 변화 (8초에 딱 2번이라 이음새 없음)
+    let a1 = 0, a2 = 0, b1 = 0, b2 = 0;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < len; i++) {
+        a1 += 0.06 * ((rnd() * 2 - 1) - a1); a2 += 0.06 * (a1 - a2);
+        b1 += 0.06 * ((rnd() * 2 - 1) - b1); b2 += 0.06 * (b1 - b2);
+        if (pass === 1) {
+          const swell = 0.75 + 0.25 * Math.sin((i / len) * Math.PI * 4);
+          L[i] = a2 * 0.35 * swell; R[i] = b2 * 0.35 * swell;
+        }
+      }
+    }
+    // ① 잔빗방울: 1초에 약 120개, 2~6ms짜리 작은 '톡'
+    for (let n = 0; n < 8 * 120; n++) {
+      const at = Math.floor(rnd() * len), dur = Math.floor(sr * (0.002 + rnd() * 0.004));
+      const amp = 0.02 + Math.pow(rnd(), 3) * 0.08, pan = rnd() * 1.6 - 0.8, cut = 0.15 + rnd() * 0.35;
+      let y = 0;
+      for (let j = 0; j < dur; j++) { y += cut * ((rnd() * 2 - 1) - y); put(at + j, y * amp * Math.exp(-j / (dur * 0.3)), pan); }
+    }
+    // ② 잎사귀 방울: 1초에 약 3개, 맑은 '똑' (음이 살짝 내려감)
+    for (let n = 0; n < 8 * 3; n++) {
+      const at = Math.floor(rnd() * len), f0 = 900 + rnd() * 1300, dur = Math.floor(sr * 0.06);
+      const amp = 0.05 + rnd() * 0.06, pan = rnd() * 1.4 - 0.7;
+      let ph = 0;
+      for (let j = 0; j < dur; j++) {
+        const t = j / sr, f = f0 * (1 - 0.35 * Math.min(1, t / 0.03));
+        ph += (2 * Math.PI * f) / sr;
+        const env = Math.min(1, t / 0.0015) * Math.exp(-t / 0.012);
+        put(at + j, Math.sin(ph) * env * amp, pan);
+      }
+    }
+    // ③ 처마 방울: 1초에 약 1개, 낮고 둥근 '툭'
+    for (let n = 0; n < 8; n++) {
+      const at = Math.floor(rnd() * len), f0 = 170 + rnd() * 120, dur = Math.floor(sr * 0.09);
+      const amp = 0.12 + rnd() * 0.08, pan = rnd() * 1.0 - 0.5;
+      let ph = 0;
+      for (let j = 0; j < dur; j++) {
+        const t = j / sr; ph += (2 * Math.PI * f0 * (1 - 0.2 * Math.min(1, t / 0.05))) / sr;
+        put(at + j, Math.sin(ph) * Math.min(1, t / 0.003) * Math.exp(-t / 0.022) * amp, pan);
+      }
+    }
     const src = c.createBufferSource();
     src.buffer = buf; src.loop = true;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600; // 벽 너머처럼 먹먹하게
-    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 150;
-    const hiss = c.createGain(); hiss.gain.value = 0.12; // 배경 '쏴아'는 아주 작게
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 0.5; // 날카로운 높은 소리는 걸러서 포근하게
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90;
     this.rainGain = c.createGain(); this.rainGain.gain.value = 0;
     this.rainGain.connect(this.master);
-    src.connect(hp).connect(lp).connect(hiss).connect(this.rainGain);
+    src.connect(hp).connect(lp).connect(this.rainGain);
     src.start();
     this.rainTarget = 0;
-    const drop = () => {
-      if (this.rainTarget > 0) {
-        this.droplet();
-        if (Math.random() < 0.25) setTimeout(() => this.droplet(), 90 + Math.random() * 120); // 가끔 '툭툭'
-      }
-      setTimeout(drop, 250 + Math.random() * 700); // 드문드문
-    };
-    drop();
-  }
-
-  droplet() {
-    const c = this.ctx, t = c.currentTime;
-    const src = c.createBufferSource(); src.buffer = this.noise;
-    // 낮고 둥근 '툭': 중간 높이 소리만 남기고 짧게 사라지게
-    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700 + Math.random() * 900; bp.Q.value = 2.5;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800;
-    const g = c.createGain();
-    const v = 0.3 + Math.random() * 0.4;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(v, t + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-    src.connect(bp).connect(lp).connect(g).connect(this.rainGain);
-    src.start(t, Math.random() * 0.9, 0.1);
   }
 
   setEnabled(on) {
