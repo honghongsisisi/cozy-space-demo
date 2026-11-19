@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>나의 작은 섬 (데모)</title>
   <meta name="description" content="작은 섬을 꾸미고 산책하는 3D 웹 데모">
-  <link rel="stylesheet" href="style.css?v=0.11">
+  <!-- 채팅 글씨체 (모두 OFL 무료 글꼴) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
+  <link rel="stylesheet" href="style.css?v=0.12">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -85,11 +89,26 @@
         <button data-tool="remove" class="danger" title="치우기 (Delete)">🗑 치우기</button>
       </div>
 
-      <!-- ④ 채팅 입력줄 (자리만) -->
+      <!-- 머리 위 말풍선이 그려지는 층 -->
+      <div class="bubble-layer" id="bubble-layer"></div>
+
+      <!-- 왼쪽 아래: 채팅 기록 창 -->
+      <div class="chat-log" id="chat-log"></div>
+
+      <!-- 말풍선 꾸미기 -->
+      <div class="chat-style hidden" id="chat-style">
+        <div class="cs-preview"><span class="speech static" id="cs-preview">안녕하세요!</span></div>
+        <div class="cs-row"><span>말풍선</span><div class="swatches" id="cs-bubble"></div></div>
+        <div class="cs-row"><span>글자</span><div class="swatches" id="cs-text"></div></div>
+        <div class="cs-row"><span>글씨체</span><div class="font-list" id="cs-font"></div></div>
+      </div>
+
+      <!-- ④ 채팅 입력줄 -->
       <div class="chatbar">
-        <select class="chat-mode" disabled><option>말하기</option></select>
-        <input class="chat-input" placeholder="채팅은 친구와 함께 노는 단계에서 열려요" disabled>
-        <button class="chat-send" disabled>보내기</button>
+        <button class="chat-btn" id="btn-chatlog" title="채팅 기록 보이기/숨기기">💬 기록</button>
+        <button class="chat-btn" id="btn-chatstyle" title="말풍선 꾸미기">🎨</button>
+        <input class="chat-input" id="chat-input" maxlength="80" placeholder="하고 싶은 말을 쓰고 Enter (지금은 나만 보여요)">
+        <button class="chat-send" id="chat-send">보내기</button>
       </div>
     </section>
     </div>
@@ -175,7 +194,7 @@
     <span class="ticker-label">📢 소식</span>
     <div class="ticker-track"><div class="ticker-text" id="ticker-text"></div></div>
     <span class="ticker-event">진행 중인 이벤트가 없어요</span>
-    <span class="version" title="지금 보고 있는 버전">v0.11</span>
+    <span class="version" title="지금 보고 있는 버전">v0.12</span>
   </footer>
 </div>
 
@@ -192,6 +211,7 @@
       <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
       <li><b>물건 고치기</b> 가구 창이 열린 동안 놓인 물건을 클릭</li>
       <li><b>분위기</b> 3D 화면 위 오른쪽에서 시간과 날씨를 바꿔요. 🕐 실제 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
+      <li><b>채팅</b> <kbd>Enter</kbd>로 입력줄을 열고 말을 쓰면 머리 위에 말풍선이 떠요. 🎨로 말풍선 꾸미기</li>
       <li><b>사진</b> 3D 화면 위 왼쪽 📷 버튼</li>
     </ul>
     <p class="muted">꾸민 섬은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
@@ -212,6 +232,6 @@
 <div id="flash"></div>
 <div id="toast"></div>
 
-<script type="module" src="js/main.js?v=0.11"></script>
+<script type="module" src="js/main.js?v=0.12"></script>
 </body>
 </html>

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.11';
-import { Avatar } from './avatar.js?v=0.11';
-import { Environment } from './environment.js?v=0.11';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.11';
-import { saveState, loadState, clearState } from './storage.js?v=0.11';
-import { Sound } from './sound.js?v=0.11';
-import { fmt } from './realtime.js?v=0.11';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.12';
+import { Avatar } from './avatar.js?v=0.12';
+import { Environment } from './environment.js?v=0.12';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.12';
+import { saveState, loadState, clearState } from './storage.js?v=0.12';
+import { Sound } from './sound.js?v=0.12';
+import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.12';
+import { fmt } from './realtime.js?v=0.12';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -605,6 +606,69 @@ function takePhoto() {
   requestAnimationFrame(() => requestAnimationFrame(() => flash.classList.remove('on')));
 }
 
+// ---------- 채팅 ----------
+const chat = new Chat({
+  viewport, camera,
+  myName: () => '나',
+  // 말한 사람의 머리 위 위치 (지금은 나뿐, 나중엔 친구 아바타도)
+  getSpeaker: (id) => (id === 'me' ? avatar.position.clone().add(new THREE.Vector3(0, 2.15 + avatar.y, 0)) : null),
+});
+const chatInput = document.getElementById('chat-input');
+const chatLogEl = document.getElementById('chat-log');
+const btnChatLog = document.getElementById('btn-chatlog');
+const chatStyleEl = document.getElementById('chat-style');
+function sendChat() { chat.send(chatInput.value); chatInput.value = ''; }
+document.getElementById('chat-send').addEventListener('click', sendChat);
+chatInput.addEventListener('keydown', (e) => {
+  e.stopPropagation(); // 글자를 치는 동안 캐릭터가 움직이지 않게
+  if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendChat(); }
+  if (e.key === 'Escape') chatInput.blur();
+});
+chatInput.addEventListener('focus', () => keys.clear());
+window.addEventListener('keydown', (e) => {
+  // 화면에서 Enter를 누르면 바로 채팅 입력
+  if (e.key === 'Enter' && document.activeElement !== chatInput && e.target.tagName !== 'INPUT') { e.preventDefault(); chatInput.focus(); }
+});
+function refreshChatLog() {
+  chatLogEl.classList.toggle('hidden', !chat.logVisible);
+  btnChatLog.classList.toggle('off', !chat.logVisible);
+  btnChatLog.textContent = chat.logVisible ? '💬 기록' : '💬 기록 숨김';
+}
+btnChatLog.addEventListener('click', () => { chat.logVisible = !chat.logVisible; chat.savePrefs(); refreshChatLog(); });
+refreshChatLog();
+// 말풍선 꾸미기
+const csPreview = document.getElementById('cs-preview');
+function refreshChatStyle() {
+  const f = FONTS.find((x) => x.id === chat.style.font) || FONTS[0];
+  Object.assign(csPreview.style, { background: chat.style.bubble, color: chat.style.color, fontFamily: f.css, fontSize: `${13 * (f.scale || 1)}px` });
+  csPreview.style.setProperty('--bubble', chat.style.bubble);
+  document.querySelectorAll('#cs-bubble button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.bubble));
+  document.querySelectorAll('#cs-text button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.color));
+  document.querySelectorAll('#cs-font button').forEach((b) => b.classList.toggle('on', b.dataset.v === chat.style.font));
+}
+function swatch(container, list, key) {
+  list.forEach((col) => {
+    const b = document.createElement('button');
+    b.dataset.v = col; b.style.background = col; b.title = col;
+    b.addEventListener('click', () => { chat.style[key] = col; chat.savePrefs(); refreshChatStyle(); });
+    container.appendChild(b);
+  });
+}
+swatch(document.getElementById('cs-bubble'), BUBBLE_COLORS, 'bubble');
+swatch(document.getElementById('cs-text'), TEXT_COLORS, 'color');
+FONTS.forEach((f) => {
+  const b = document.createElement('button');
+  b.dataset.v = f.id; b.textContent = f.name; b.style.fontFamily = f.css;
+  b.addEventListener('click', () => { chat.style.font = f.id; chat.savePrefs(); refreshChatStyle(); });
+  document.getElementById('cs-font').appendChild(b);
+});
+const btnChatStyle = document.getElementById('btn-chatstyle');
+btnChatStyle.addEventListener('click', () => {
+  chatStyleEl.classList.toggle('hidden');
+  btnChatStyle.classList.toggle('on', !chatStyleEl.classList.contains('hidden'));
+});
+refreshChatStyle();
+
 // ---------- 매 프레임 ----------
 const clock = new THREE.Clock();
 let realTick = 0;
@@ -625,6 +689,7 @@ function frame() {
     if (markerT <= 0 || !avatar.target) marker.visible = false;
   }
   updateTools();
+  chat.update();
   sound.setRain(env.weather === 'rain'); // 비가 오면 빗소리
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -633,4 +698,4 @@ frame();
 document.getElementById('loading').classList.add('done');
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, saveNow, sound, setRole };
+window.cozy = { world, avatar, env, cam, saveNow, sound, setRole, chat };
