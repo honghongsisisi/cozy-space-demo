@@ -10,7 +10,7 @@ export const BUBBLE_COLORS = ['#fffdf7', '#fbe9ea', '#eef4e6', '#e8f0fa', '#f1eb
 export const TEXT_COLORS = ['#4a4458', '#6b4f3f', '#3f5e4a', '#3f5170', '#7a4a66'];
 // 글씨체: 모두 SIL 오픈 폰트 라이선스(OFL) — 무료, 상업적 사용 가능 (Google Fonts에서 불러옴)
 export const FONTS = [
-  { id: 'basic', name: '기본', css: '"Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
+  { id: 'basic', name: '기본', css: '"Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' },
   { id: 'gowun', name: '고운돋움', css: '"Gowun Dodum", sans-serif' },
   { id: 'jua', name: '주아', css: '"Jua", sans-serif' },
   { id: 'pen', name: '손글씨', css: '"Nanum Pen Script", cursive', scale: 1.45 },

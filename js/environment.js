@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.12';
-import { glowMat, fireMat } from './catalog.js?v=0.12';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.12';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.13';
+import { glowMat, fireMat } from './catalog.js?v=0.13';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.13';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -131,20 +131,28 @@ export class Environment {
     }
   }
 
+  // 구름: 각진 돌덩이처럼 보이지 않게 매끈한 공을 여러 개 겹친 솜사탕 모양.
+  // 스스로 조금 빛나게(emissive) 해서 그늘진 아랫면도 회색 덩어리가 되지 않음
   makeClouds() {
     this.cloudRoot = new THREE.Group();
-    this.cloudMat = new THREE.MeshLambertMaterial({ color: P.cloud, flatShading: true, transparent: true, opacity: 0.92 });
-    const geo = new THREE.IcosahedronGeometry(1, 0);
+    this.cloudMat = new THREE.MeshLambertMaterial({ color: P.cloud, emissive: 0xffffff, emissiveIntensity: 0.45, transparent: true, opacity: 0.9, fog: false });
+    const geo = new THREE.SphereGeometry(1, 18, 12);
     for (let i = 0; i < 10; i++) {
       const c = new THREE.Group();
-      const parts = 3 + (i % 3);
+      const parts = 4 + (i % 3);
       for (let j = 0; j < parts; j++) {
         const m = new THREE.Mesh(geo, this.cloudMat);
-        const s = 4 + Math.random() * 4;
-        m.scale.set(s * 1.4, s * 0.7, s);
-        m.position.set(j * 5 - parts * 2.5, Math.random() * 2, Math.random() * 3);
+        const mid = 1 - Math.abs(j - (parts - 1) / 2) / parts; // 가운데가 더 크고 높게
+        const s = 3 + mid * 3.5 + Math.random() * 1.2;
+        m.scale.set(s * 1.25, s * 0.8, s);
+        m.position.set(j * 4.2 - parts * 2.1, mid * 2.2 + Math.random() * 0.6, Math.random() * 2.5);
         c.add(m);
       }
+      // 아래를 평평하게 받쳐 주는 납작한 공 (뭉게구름의 바닥)
+      const base = new THREE.Mesh(geo, this.cloudMat);
+      base.scale.set(parts * 2.6, 1.6, 4);
+      base.position.set(-2.1, -0.6, 1.2);
+      c.add(base);
       const a = (i / 10) * Math.PI * 2, d = 110 + Math.random() * 90;
       c.position.set(Math.cos(a) * d, 30 + Math.random() * 25, Math.sin(a) * d);
       c.lookAt(0, c.position.y, 0);
@@ -237,20 +245,23 @@ export class Environment {
     const night = this.nightness();
 
     const { a, b, k } = this.sample();
-    const gray = this._c2.setHex(night > 0.5 ? 0x3b3f5c : 0xaeb6c2);
-    const top = this._c1.setHex(a.top).lerp(new THREE.Color(b.top), k).lerp(gray, cl * 0.6);
+    // 흐린 날 색: 차가운 잿빛 대신 연보랏빛 도는 포근한 회색 (밤엔 남보라)
+    const gray = this._c2.setHex(night > 0.5 ? 0x4b4a7e : 0xc6c3da);
+    const top = this._c1.setHex(a.top).lerp(new THREE.Color(b.top), k).lerp(gray, cl * 0.5);
     this.skyMat.uniforms.top.value.copy(top);
-    const bottom = new THREE.Color(a.bottom).lerp(new THREE.Color(b.bottom), k).lerp(gray, cl * 0.5);
+    const bottom = new THREE.Color(a.bottom).lerp(new THREE.Color(b.bottom), k).lerp(new THREE.Color(night > 0.5 ? 0x8a74b8 : 0xe2d9e6), cl * 0.45);
     this.skyMat.uniforms.bottom.value.copy(bottom);
     this.scene.fog.color.copy(bottom);
 
     // 물은 하늘색을 비춤
     this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
+    // 밤 물빛: 진한 보라 대신 참고 이미지 같은 분홍빛 도는 연보라로 살짝 밝게
+    this.world.water.material.color.lerp(this._c2.setHex(0xb294dc), night * 0.5);
     this.world.ripples.material.opacity = 0.14 + (1 - night) * 0.16;
     this.world.ripples2.material.opacity = 0.08 + (1 - night) * 0.08;
 
-    const sunI = (a.sunI + (b.sunI - a.sunI) * k) * (1 - cl * 0.55);
-    const ambI = (a.ambI + (b.ambI - a.ambI) * k) * (1 - cl * 0.2);
+    const sunI = (a.sunI + (b.sunI - a.sunI) * k) * (1 - cl * 0.45);
+    const ambI = (a.ambI + (b.ambI - a.ambI) * k) * (1 - cl * 0.1); // 흐려도 섬은 너무 어두워지지 않게
     this.sun.color.setHex(a.sun).lerp(new THREE.Color(b.sun), k);
     this.sun.intensity = sunI;
     this.hemi.intensity = ambI;
@@ -278,7 +289,8 @@ export class Environment {
     this.sky.position.copy(focus);
 
     const tt = performance.now() / 1000;
-    this.cloudMat.color.setHex(0xffffff).lerp(new THREE.Color(night > 0.5 ? 0x5a5f8a : 0xc8ced8), Math.max(cl, night * 0.8));
+    this.cloudMat.color.setHex(0xffffff).lerp(new THREE.Color(night > 0.5 ? 0x6c6aa0 : 0xdedbea), Math.max(cl * 0.8, night * 0.8));
+    this.cloudMat.emissive.setHex(0xffffff).lerp(new THREE.Color(night > 0.5 ? 0x4a4880 : 0xe6e2f0), Math.max(cl * 0.6, night * 0.85));
     this.cloudRoot.rotation.y += dt * 0.004;
 
     // 등불: 밤이나 흐린 날 켜짐

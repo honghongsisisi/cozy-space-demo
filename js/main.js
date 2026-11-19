@@ -1,12 +1,16 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.12';
-import { Avatar } from './avatar.js?v=0.12';
-import { Environment } from './environment.js?v=0.12';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.12';
-import { saveState, loadState, clearState } from './storage.js?v=0.12';
-import { Sound } from './sound.js?v=0.12';
-import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.12';
-import { fmt } from './realtime.js?v=0.12';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.13';
+import { Avatar } from './avatar.js?v=0.13';
+import { Environment } from './environment.js?v=0.13';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.13';
+import { saveState, loadState } from './storage.js?v=0.13';
+import { Sound } from './sound.js?v=0.13';
+import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.13';
+import { fmt } from './realtime.js?v=0.13';
+import { icon, fillIcons } from './icons.js?v=0.13';
+import { makeThumbnails } from './thumbs.js?v=0.13';
+
+fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -54,7 +58,7 @@ function currentState() {
 }
 function saveNow(showToast) {
   const ok = saveState(currentState());
-  if (showToast) toast(ok ? '저장했어요 💾' : '이 브라우저에서는 저장할 수 없어요');
+  if (showToast) toast(ok ? '저장했어요' : '이 브라우저에서는 저장할 수 없어요');
 }
 function scheduleSave() {
   clearTimeout(saveTimer);
@@ -90,6 +94,13 @@ window.addEventListener('keydown', (e) => {
     if (lastTap.key === k && now - lastTap.t < 350) avatar.running = true;
     lastTap = { key: k, t: now };
   }
+  // 되돌리기 / 다시 하기 (윈도 Ctrl, 맥 Cmd)
+  if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
+    e.preventDefault();
+    if (k === 'y' || e.shiftKey) redo(); else undo();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey) return; // 다른 단축키(새로 고침 등)는 브라우저에 맡김
   keys.add(k);
   if (k === ' ') { e.preventDefault(); avatar.jump(); }
   if (k === '1') avatar.wave();
@@ -166,6 +177,7 @@ canvas.addEventListener('pointermove', (e) => {
     }
   }
   if (placing && e.pointerType === 'mouse') updateGhost(e);
+  else if (!drag && e.pointerType === 'mouse') updateHover(e);
   lastShift = e.shiftKey;
 });
 canvas.addEventListener('pointerup', (e) => {
@@ -174,15 +186,33 @@ canvas.addEventListener('pointerup', (e) => {
   if (drag && !drag.moved && drag.button === 0) handleClick(e);
   drag = null;
 });
+canvas.addEventListener('pointerleave', () => setHover(null));
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY * 0.01); }, { passive: false });
 function zoom(d) { cam.dist = Math.max(4, Math.min(32, cam.dist + d)); }
 
 // 땅을 클릭했을 때 생기는 작은 표시
-const marker = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.28, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
+// 도착할 때까지 은은하게 남아 있다가, 도착하면 천천히 사라짐
+const marker = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.46, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
 marker.rotation.x = -Math.PI / 2;
 marker.visible = false;
 scene.add(marker);
 let markerT = 0;
+
+// 마우스 아래 있는 물건 찾기. 정확히 못 눌러도 누른 곳 가까이 있는 물건을 골라 줌
+function pickItem(e) {
+  setNdc(e);
+  const hit = raycaster.intersectObject(world.root, true)[0];
+  let id = hit ? world.findItemFromObject(hit.object) : null;
+  if (!id) {
+    const p = groundPoint(e);
+    let best = 1.0;
+    if (p) world.items.forEach(({ data }) => {
+      const d = Math.hypot(data.x - p.x, data.z - p.z);
+      if (d < best) { best = d; id = data.id; }
+    });
+  }
+  return id;
+}
 
 function handleClick(e) {
   if (placing) {
@@ -191,19 +221,7 @@ function handleClick(e) {
     return;
   }
   if (decorating) {
-    setNdc(e);
-    const hit = raycaster.intersectObject(world.root, true)[0];
-    let id = hit ? world.findItemFromObject(hit.object) : null;
-    if (!id) {
-      // 물건을 정확히 못 눌러도, 누른 곳 가까이 있는 물건을 골라 줌
-      const p = groundPoint(e);
-      let best = 1.0;
-      if (p) world.items.forEach(({ data }) => {
-        const d = Math.hypot(data.x - p.x, data.z - p.z);
-        if (d < best) { best = d; id = data.id; }
-      });
-    }
-    select(id);
+    select(pickItem(e));
     return;
   }
   const p = groundPoint(e);
@@ -220,6 +238,60 @@ function handleClick(e) {
   }
 }
 
+// ---------- 되돌리기 / 다시 하기 ----------
+// 원리: 물건을 바꿀 때마다 '거꾸로 되돌리는 방법'을 함께 적어 둡니다.
+// 놓기 ↔ 치우기, 옮기기 ↔ 원래 자리로, 처음 모습으로 ↔ 그 전 모습 전체.
+const undoStack = [], redoStack = [];
+function inverseOf(a) {
+  if (a.type === 'add') return { type: 'remove', id: a.item.id };
+  if (a.type === 'remove') return { type: 'add', item: { ...world.items.get(a.id).data } };
+  if (a.type === 'update') {
+    const old = world.items.get(a.id).data, back = {};
+    Object.keys(a.patch).forEach((k) => { back[k] = old[k]; });
+    return { type: 'update', id: a.id, patch: back };
+  }
+  if (a.type === 'replaceAll') return { type: 'replaceAll', items: world.serialize() };
+  return null;
+}
+function doAction(a, label) {
+  const inv = inverseOf(a);
+  world.apply(a);
+  if (inv) { undoStack.push({ a, inv, label }); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
+  refreshHistory();
+}
+function undo() {
+  if (role === 'guest') return;
+  const h = undoStack.pop();
+  if (!h) return toast('되돌릴 것이 없어요');
+  stopPlacing(true); select(null);
+  world.apply(h.inv);
+  redoStack.push(h);
+  refreshHistory();
+  toast(`되돌렸어요 (${h.label})`);
+}
+function redo() {
+  if (role === 'guest') return;
+  const h = redoStack.pop();
+  if (!h) return toast('다시 할 것이 없어요');
+  stopPlacing(true); select(null);
+  h.inv = inverseOf(h.a);
+  world.apply(h.a);
+  undoStack.push(h);
+  refreshHistory();
+  toast(`다시 했어요 (${h.label})`);
+}
+const btnUndo = document.getElementById('btn-undo');
+const btnRedo = document.getElementById('btn-redo');
+function refreshHistory() {
+  btnUndo.disabled = !undoStack.length;
+  btnRedo.disabled = !redoStack.length;
+}
+btnUndo.addEventListener('click', undo);
+btnRedo.addEventListener('click', redo);
+refreshHistory();
+
+let role = 'owner'; // 주인(owner) / 손님(guest). 아래 '주인 / 손님' 부분 참고
+
 // ---------- 꾸미기 ----------
 const drawerHint = document.getElementById('drawer-hint');
 const btnCancel = document.getElementById('btn-cancel-place');
@@ -232,26 +304,26 @@ let selectedId = null;
 let gridOn = false;   // 격자 보이기 (배치는 격자와 상관없이 자유)
 let lastShift = false;
 
-// 격자 켜기/끄기 버튼
-const gridBtn = document.createElement('button');
-gridBtn.className = 'chip-btn grid-toggle';
-function refreshGridBtn() { gridBtn.textContent = gridOn ? '▦ 격자 보기: 켬' : '▦ 격자 보기: 끔'; world.grid.visible = decorating && gridOn; }
-gridBtn.addEventListener('click', () => { gridOn = !gridOn; refreshGridBtn(); });
-folders.before(gridBtn);
+// 격자 켜기/끄기 (창 아래쪽 작은 스위치)
+const gridToggle = document.getElementById('grid-toggle');
+function refreshGridBtn() { gridToggle.checked = gridOn; world.grid.visible = decorating && gridOn; }
+gridToggle.addEventListener('change', () => { gridOn = gridToggle.checked; refreshGridBtn(); });
 
 // 분류 폴더별로 물건 카드 만들기
+const THUMBS = makeThumbnails(ITEMS.map((it) => it.type)); // 게임 속 모양 그대로 찍은 카드 그림
 ITEM_GROUPS.forEach((g) => {
   const list = ITEMS.filter((it) => it.group === g.id);
   const f = document.createElement('div');
   f.className = 'folder';
-  f.innerHTML = `<div class="folder-head">📂 ${g.name} (${list.length})</div><div class="item-grid"></div>`;
+  f.innerHTML = `<div class="folder-head" title="눌러서 접기/펴기">${icon('folder')}${g.name} <span class="count">${list.length}</span>${icon('chevron', 'chev')}</div><div class="item-grid"></div>`;
   f.querySelector('.folder-head').addEventListener('click', () => f.classList.toggle('closed'));
   const grid = f.querySelector('.item-grid');
   list.forEach((it) => {
     const b = document.createElement('button');
     b.className = 'item-card';
     b.dataset.type = it.type;
-    b.innerHTML = `<span class="emoji">${it.emoji}</span><span>${it.name}</span>`;
+    b.title = it.name;
+    b.innerHTML = THUMBS[it.type] ? `<img class="thumb" alt="" src="${THUMBS[it.type]}"><span>${it.name}</span>` : `<span class="thumb"></span><span>${it.name}</span>`;
     b.addEventListener('click', () => startPlacing(it.type));
     grid.appendChild(b);
   });
@@ -261,7 +333,7 @@ ITEM_GROUPS.forEach((g) => {
 function setDecorating(on) {
   decorating = on;
   refreshGridBtn();
-  if (!on) { stopPlacing(true); select(null); }
+  if (!on) { stopPlacing(true); select(null); setHover(null); }
 }
 
 // ---------- 오른쪽 메뉴와 펼쳐지는 창 ----------
@@ -270,14 +342,14 @@ const panelTitle = document.getElementById('panel-title');
 const rail = document.getElementById('rail');
 const railSub = document.getElementById('rail-sub');
 const PANES = {
-  space: '🏝️ 내 공간', friends: '👫 친구', manage: '⚙️ 관리',
-  furniture: '🎁 아이템 · 가구', closet: '🎁 아이템 · 옷장', shop: '🎁 아이템 · 상점',
+  space: '내 공간', friends: '친구', manage: '관리',
+  furniture: '아이템 · 가구', closet: '아이템 · 옷장', shop: '아이템 · 상점',
 };
 let panelOpen = false, currentPane = null;
 function openPanel(pane) {
   if (pane === 'furniture' && role === 'guest') { toast('꾸미기는 섬 주인만 할 수 있어요'); return; }
   panelOpen = !!pane; currentPane = pane;
-  panel.classList.toggle('hidden', !pane);
+  panel.classList.toggle('closed', !pane); // 닫을 때도 내용은 그대로 두고 폭만 천천히 줄임
   if (pane) {
     panelTitle.textContent = PANES[pane];
     panel.querySelectorAll('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
@@ -355,13 +427,13 @@ function placeGhost() {
   const { x, z } = placing.ghost.position;
   if (placing.movingId) {
     const id = placing.movingId;
-    world.apply({ type: 'update', id, patch: { x, z, rot: placing.rot } });
     world.items.get(id).obj.visible = true;
+    doAction({ type: 'update', id, patch: { x, z, rot: placing.rot } }, '옮기기');
     placing.movingId = null;
     stopPlacing(false);
     select(id);
   } else {
-    world.apply({ type: 'add', item: { id: newId(), type: placing.type, x, z, rot: placing.rot } });
+    doAction({ type: 'add', item: { id: newId(), type: placing.type, x, z, rot: placing.rot } }, `${ITEM_BY_TYPE[placing.type].name} 놓기`);
     // 같은 물건을 계속 놓을 수 있게 그대로 둠
   }
 }
@@ -373,7 +445,7 @@ function rotateCurrent(step = 15) {
     placing.ghost.rotation.y = placing.rot * Math.PI / 180;
   } else if (selectedId) {
     const it = world.items.get(selectedId);
-    world.apply({ type: 'update', id: selectedId, patch: { rot: (it.data.rot + step) % 360 } });
+    doAction({ type: 'update', id: selectedId, patch: { rot: (it.data.rot + step) % 360 } }, '돌리기');
   }
 }
 
@@ -383,10 +455,30 @@ selRing.rotation.x = -Math.PI / 2;
 selRing.visible = false;
 scene.add(selRing);
 
+// 마우스를 올린 물건 아래에 옅은 고리 (꾸미기 중에만, 누를 수 있다는 표시)
+const hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }));
+hoverRing.rotation.x = -Math.PI / 2;
+hoverRing.visible = false;
+scene.add(hoverRing);
+let hoverId = null;
+function setHover(id) {
+  hoverId = id && id !== selectedId ? id : null;
+  hoverRing.visible = !!hoverId;
+  canvas.classList.toggle('can-pick', !!id);
+  if (hoverId) {
+    const it = world.items.get(hoverId);
+    const r = Math.max(0.6, ITEM_BY_TYPE[it.data.type].radius + 0.3);
+    hoverRing.scale.setScalar(r / 0.72);
+    hoverRing.position.set(it.data.x, 0.025, it.data.z);
+  }
+}
+function updateHover(e) { setHover(decorating && !placing ? pickItem(e) : null); }
+
 function select(id) {
   selectedId = id && world.items.has(id) ? id : null;
   selRing.visible = !!selectedId;
   tools.classList.toggle('hidden', !selectedId);
+  if (selectedId && hoverId === selectedId) setHover(null);
 }
 function startMove(id) {
   const it = world.items.get(id);
@@ -394,9 +486,9 @@ function startMove(id) {
 }
 function removeSelected() {
   if (!selectedId) return;
-  world.apply({ type: 'remove', id: selectedId });
+  doAction({ type: 'remove', id: selectedId }, '치우기');
   select(null);
-  toast('치웠어요');
+  toast('치웠어요 · Ctrl+Z로 되돌릴 수 있어요');
 }
 tools.addEventListener('click', (e) => {
   const t = e.target.closest('button');
@@ -423,16 +515,24 @@ const timeSeg = document.getElementById('time-seg');
 const weatherSeg = document.getElementById('weather-seg');
 const timeFlow = document.getElementById('time-flow');
 const realInfo = document.getElementById('real-info');
+const btnReal = document.getElementById('btn-real');
+const timeFlowLabel = document.getElementById('time-flow-label');
 function refreshEnvButtons() {
   timeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on',
     b.dataset.time === 'real' ? env.realTime : (!env.realTime && !env.flowing && Math.abs(env.time - parseFloat(b.dataset.time)) < 0.01)));
-  realInfo.classList.toggle('hidden', !env.realTime);
-  timeFlow.parentElement.classList.toggle('hidden', env.realTime);
-  if (env.realTime && env.sun_) realInfo.textContent = `서울 ${fmt(env.seoul)} · 해 뜸 ${fmt(env.sun_.sunrise)} · 해 짐 ${fmt(env.sun_.sunset)}`;
+  // 실제 시간일 때: 버튼 안에 지금 시각, 마우스를 올리면 해 뜸·해 짐. '시간이 흐르게'는 자리는 그대로 두고 흐리게만
+  if (env.realTime && env.sun_) {
+    realInfo.textContent = fmt(env.seoul);
+    btnReal.title = `서울 ${fmt(env.seoul)} · 해 뜸 ${fmt(env.sun_.sunrise)} · 해 짐 ${fmt(env.sun_.sunset)}`;
+  }
+  timeFlowLabel.classList.toggle('dim', env.realTime);
+  timeFlow.disabled = env.realTime || role === 'guest';
+  timeFlowLabel.title = env.realTime ? '실제 시간을 쓰는 동안에는 저절로 흘러요' : '';
   weatherSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', env.weather === b.dataset.weather));
   timeFlow.checked = env.flowing;
 }
 timeSeg.addEventListener('click', (e) => {
+  if (role === 'guest') return;
   const b = e.target.closest('button'); if (!b) return;
   env.flowing = false;
   if (b.dataset.time === 'real') { env.realTime = true; env.update(0, avatar.position); }
@@ -450,13 +550,14 @@ refreshEnvButtons();
 // ---------- 주인 / 손님 ----------
 // 규칙: 섬의 시간·날씨·꾸미기는 주인(방장)이 정하고, 놀러 온 손님은 바꿀 수 없음.
 // 지금은 언제나 주인. 나중에 방문 기능을 만들면 친구 섬에 들어갈 때 setRole('guest')만 부르면 됨.
-let role = 'owner';
 function setRole(r) {
   role = r;
   const guest = r === 'guest';
   document.querySelectorAll('#env-panel button, #env-panel input').forEach((el) => { el.disabled = guest; });
   document.getElementById('env-panel').title = guest ? '시간과 날씨는 섬 주인이 정해요' : '';
-  document.querySelectorAll('.rail-sub [data-sub="furniture"], #btn-reset, #btn-title-edit').forEach((el) => { el.disabled = guest; });
+  document.querySelectorAll('.rail-sub [data-sub="furniture"], #btn-reset, #btn-title-edit, #btn-undo, #btn-redo').forEach((el) => { el.disabled = guest; });
+  if (!guest) refreshHistory();
+  refreshEnvButtons();
   if (guest && currentPane === 'furniture') openPanel(null);
 }
 setRole(role);
@@ -480,13 +581,13 @@ const titleBtn = document.getElementById('btn-title-edit');
 function showTitle() { titleEl.textContent = roomTitle; document.title = `${roomTitle} (데모)`; }
 function finishTitle(save) {
   if (save) { roomTitle = titleInput.value.trim() || roomTitle; scheduleSave(); }
-  titleInput.classList.add('hidden'); titleEl.classList.remove('hidden'); titleBtn.textContent = '수정';
+  titleInput.classList.add('hidden'); titleEl.classList.remove('hidden'); titleBtn.innerHTML = icon('pencil'); titleBtn.title = '섬 이름 고치기';
   showTitle();
 }
 titleBtn.addEventListener('click', () => {
   if (!titleInput.classList.contains('hidden')) return finishTitle(true);
   titleInput.value = roomTitle;
-  titleEl.classList.add('hidden'); titleInput.classList.remove('hidden'); titleBtn.textContent = '완료';
+  titleEl.classList.add('hidden'); titleInput.classList.remove('hidden'); titleBtn.innerHTML = icon('check'); titleBtn.title = '다 고쳤어요';
   titleInput.focus(); titleInput.select();
 });
 titleInput.addEventListener('keydown', (e) => {
@@ -495,18 +596,27 @@ titleInput.addEventListener('keydown', (e) => {
   e.stopPropagation();
 });
 showTitle();
+const TIME_NAMES = { 7: '아침', 13: '낮', 18.3: '노을', 22: '밤' };
+const WEATHER_NAMES = { clear: '맑음', cloudy: '흐림', rain: '비', snow: '눈', petals: '꽃잎' };
 function refreshSpaceInfo() {
   document.getElementById('space-title').textContent = roomTitle;
   document.getElementById('space-count').textContent = `${world.items.size}개`;
+  const counts = {};
+  world.items.forEach(({ data }) => { const g = ITEM_BY_TYPE[data.type].group; counts[g] = (counts[g] || 0) + 1; });
+  document.getElementById('space-groups').innerHTML = ITEM_GROUPS.map((g) => `<span>${g.name}<b>${counts[g.id] || 0}</b></span>`).join('');
+  document.getElementById('space-time').textContent = env.realTime ? '실제 시간 (한국)' : env.flowing ? '흐르는 시간' : (TIME_NAMES[Math.round(env.time * 10) / 10] || `${fmt(env.time)}`);
+  document.getElementById('space-weather').textContent = WEATHER_NAMES[env.weather] || env.weather;
 }
+world.onChange(() => { if (currentPane === 'space') refreshSpaceInfo(); });
 
 // 아래 소식줄 (지금은 고정 문구, 나중에 서버 소식으로)
 document.getElementById('ticker-text').innerHTML = [
-  '🏝️ 나의 작은 섬 데모에 오신 걸 환영해요',
-  '🎁 오른쪽 아이템 → 가구에서 섬을 꾸며 보세요',
-  '🌙 밤이 되면 등불이 켜지고 별이 떠요',
-  '📷 마음에 드는 장면은 사진으로 남겨 보세요',
-  '👫 친구 섬 놀러 가기는 다음 단계에서 열려요',
+  '나의 작은 섬 데모에 오신 걸 환영해요',
+  '오른쪽 아이템 → 가구에서 섬을 꾸며 보세요',
+  '밤이 되면 등불이 켜지고 별이 떠요',
+  '마음에 드는 장면은 사진으로 남겨 보세요',
+  '실수했다면 Ctrl+Z로 되돌릴 수 있어요',
+  '친구 섬 놀러 가기는 다음 단계에서 열려요',
 ].join('<i>·</i>');
 document.getElementById('btn-save').addEventListener('click', () => saveNow(true));
 
@@ -516,8 +626,9 @@ avatar.onStep = () => sound.footstep();
 const btnSound = document.getElementById('btn-sound');
 const btnSound2 = document.getElementById('btn-sound2');
 function refreshSoundBtn() {
-  btnSound.textContent = sound.enabled ? '🔊' : '🔇';
-  btnSound2.textContent = sound.enabled ? '🔊 소리 끄기' : '🔇 소리 켜기';
+  btnSound.innerHTML = `${icon(sound.enabled ? 'soundOn' : 'soundOff')}<span>${sound.enabled ? '소리' : '소리 꺼짐'}</span>`;
+  btnSound.classList.toggle('off', !sound.enabled);
+  btnSound2.innerHTML = `${icon(sound.enabled ? 'soundOn' : 'soundOff')}<span>${sound.enabled ? '소리 끄기' : '소리 켜기'}</span>`;
 }
 const toggleSound = () => { sound.setEnabled(!sound.enabled); refreshSoundBtn(); toast(sound.enabled ? '소리를 켰어요' : '소리를 껐어요'); };
 btnSound.addEventListener('click', toggleSound);
@@ -525,20 +636,20 @@ btnSound2.addEventListener('click', toggleSound);
 refreshSoundBtn();
 
 const btnReset = document.getElementById('btn-reset');
+const resetLabel = btnReset.querySelector('span');
 let resetArmed = null;
 btnReset.addEventListener('click', () => {
   if (!resetArmed) {
-    btnReset.textContent = '정말 처음으로? 한 번 더 누르기';
-    resetArmed = setTimeout(() => { resetArmed = null; btnReset.textContent = '↺ 섬을 처음 모습으로'; }, 3000);
+    resetLabel.textContent = '정말 처음으로? 한 번 더 누르기';
+    resetArmed = setTimeout(() => { resetArmed = null; resetLabel.textContent = '섬을 처음 모습으로'; }, 3000);
     return;
   }
   clearTimeout(resetArmed); resetArmed = null;
-  btnReset.textContent = '↺ 섬을 처음 모습으로';
+  resetLabel.textContent = '섬을 처음 모습으로';
   stopPlacing(true); select(null);
-  clearState();
-  world.apply({ type: 'replaceAll', items: DEFAULT_ITEMS.map((i) => ({ ...i, id: newId() })) });
+  doAction({ type: 'replaceAll', items: DEFAULT_ITEMS.map((i) => ({ ...i, id: newId() })) }, '처음 모습으로');
   avatar.restore({ x: 0, z: 3, facing: 0 });
-  toast('처음 모습으로 돌아왔어요');
+  toast('처음 모습으로 돌아왔어요 · Ctrl+Z로 되돌릴 수 있어요');
 });
 
 const help = document.getElementById('help');
@@ -570,7 +681,7 @@ document.getElementById('photo-close').addEventListener('click', () => photoModa
 
 function takePhoto() {
   // 선택 표시 같은 꾸미기 도구는 사진에서 빼기
-  const hidden = [selRing, marker, world.grid, placing && placing.ghost].filter((o) => o && o.visible);
+  const hidden = [selRing, hoverRing, marker, world.grid, placing && placing.ghost].filter((o) => o && o.visible);
   hidden.forEach((o) => (o.visible = false));
   renderer.render(scene, camera);
   const shot = canvas.toDataURL('image/png');
@@ -590,9 +701,9 @@ function takePhoto() {
     const d = new Date();
     const stamp = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     ctx.fillStyle = '#9a8a7a';
-    ctx.font = `${Math.round(bottom * 0.36)}px "Apple SD Gothic Neo","Malgun Gothic",sans-serif`;
+    ctx.font = `${Math.round(bottom * 0.36)}px ${getComputedStyle(document.body).fontFamily}`;
     ctx.textBaseline = 'middle';
-    ctx.fillText('🏝️ ' + roomTitle, pad, img.height + pad + bottom / 2);
+    ctx.fillText(roomTitle, pad, img.height + pad + bottom / 2);
     ctx.textAlign = 'right';
     ctx.fillText(stamp, c.width - pad, img.height + pad + bottom / 2);
     const url = c.toDataURL('image/png');
@@ -632,7 +743,7 @@ window.addEventListener('keydown', (e) => {
 function refreshChatLog() {
   chatLogEl.classList.toggle('hidden', !chat.logVisible);
   btnChatLog.classList.toggle('off', !chat.logVisible);
-  btnChatLog.textContent = chat.logVisible ? '💬 기록' : '💬 기록 숨김';
+  btnChatLog.querySelector('span').textContent = chat.logVisible ? '기록' : '기록 숨김';
 }
 btnChatLog.addEventListener('click', () => { chat.logVisible = !chat.logVisible; chat.savePrefs(); refreshChatLog(); });
 refreshChatLog();
@@ -682,11 +793,19 @@ function frame() {
   updateCamera(dt);
   env.update(dt, avatar.position);
   if (env.flowing || (env.realTime && (realTick += dt) > 1)) { realTick = 0; refreshEnvButtons(); } // 실제 시간 표시는 1초에 한 번
-  if (markerT > 0) {
-    markerT -= dt * 1.5;
-    marker.material.opacity = Math.max(0, markerT);
-    marker.scale.setScalar(1 + (1 - markerT) * 0.6);
-    if (markerT <= 0 || !avatar.target) marker.visible = false;
+  if (marker.visible) {
+    if (avatar.target) {
+      // 가는 동안: 은은하게 숨 쉬듯
+      const t = performance.now() / 1000;
+      marker.material.opacity = 0.55 + Math.sin(t * 4) * 0.15;
+      marker.scale.setScalar(1 + Math.sin(t * 4) * 0.06);
+    } else {
+      // 도착하면: 조금 커지며 천천히 사라짐
+      markerT -= dt * 1.4;
+      marker.material.opacity = Math.max(0, markerT * 0.7);
+      marker.scale.setScalar(1 + (1 - markerT) * 0.5);
+      if (markerT <= 0) marker.visible = false;
+    }
   }
   updateTools();
   chat.update();
@@ -698,4 +817,4 @@ frame();
 document.getElementById('loading').classList.add('done');
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, saveNow, sound, setRole, chat };
+window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo };

@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.12';
-import { PALETTE as P } from './palette.js?v=0.12';
+import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.13';
+import { PALETTE as P } from './palette.js?v=0.13';
 
 export const PLOT_RADIUS = 10; // 둥근 섬의 반지름
 
@@ -103,17 +103,22 @@ export class World {
     top.receiveShadow = true;
     this.scene.add(top);
     this.groundPick = top;
-    // 나무 말뚝 테두리
-    const n = 64;
+    // 나무 말뚝 테두리: 손으로 박은 것처럼 간격·굵기·높이·기울기를 조금씩 다르게
+    let sv = 11; const rnd = () => ((sv = (sv * 9301 + 49297) % 233280) / 233280); // 늘 같은 모양이 나오는 난수
     const post = new THREE.CylinderGeometry(0.16, 0.18, 0.5, 6);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const pm = new THREE.Mesh(post, mat(i % 2 ? P.wood : P.woodDark));
-      const h = 0.4 + ((i * 37) % 5) * 0.04;
-      pm.scale.y = h / 0.5;
-      pm.position.set(Math.cos(a) * (R + 0.12), -0.05 + h / 2 - 0.1, Math.sin(a) * (R + 0.12));
+    const woods = [mat(P.wood), mat(P.woodDark), mat(0xa47a55)];
+    let a = 0;
+    while (a < Math.PI * 2 - 0.05) {
+      const thick = 0.8 + rnd() * 0.45;
+      const pm = new THREE.Mesh(post, woods[Math.floor(rnd() * 3)]);
+      const h = 0.32 + rnd() * 0.3;
+      pm.scale.set(thick, h / 0.5, thick);
+      const rr = R + 0.08 + rnd() * 0.1;
+      pm.position.set(Math.cos(a) * rr, -0.05 + h / 2 - 0.1, Math.sin(a) * rr);
+      pm.rotation.set((rnd() - 0.5) * 0.12, rnd() * Math.PI, (rnd() - 0.5) * 0.12);
       pm.castShadow = true; pm.receiveShadow = true;
       this.scene.add(pm);
+      a += (0.3 * thick + 0.02 + rnd() * 0.05) / R; // 말뚝 굵기만큼 띄우고, 사이 간격도 들쭉날쭉
     }
 
     // 꾸미기 중에만 보이는 바둑판 줄

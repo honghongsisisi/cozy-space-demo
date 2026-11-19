@@ -1,6 +1,6 @@
 // 아이템 목록. 새 물건을 넣으려면 ITEMS에 한 줄 추가하고 build 함수를 만들면 됩니다.
 import * as THREE from 'three';
-import { PALETTE as P } from './palette.js?v=0.12';
+import { PALETTE as P } from './palette.js?v=0.13';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -107,8 +107,12 @@ const builders = {
     const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), glowMat);
     lantern.scale.y = 1.2;
     f.add(lantern);
-    f.add(mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8), mat(P.woodDark), 0, 0.25, 0));
-    f.add(mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8), mat(P.woodDark), 0, -0.25, 0));
+    // 위·아래 뚜껑: 공중에 떠 있어서 그림자가 바닥에 '검은 점'처럼만 남으므로 그림자를 만들지 않음
+    [0.25, -0.25].forEach((y) => {
+      const cap = mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8), mat(P.woodDark), 0, y, 0);
+      cap.castShadow = false;
+      f.add(cap);
+    });
     f.position.y = 1.3;
     g.add(f);
     g.userData.float = f;
