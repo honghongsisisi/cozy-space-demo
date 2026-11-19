@@ -18,12 +18,12 @@ export const PALETTE = {
   fire: 0xffa94d,
   cloud: 0xffffff,
   // 아바타
-  skin: 0xffe0c7,
-  hair: 0x7a5640,
-  shirt: 0xbfe0f2,
-  pants: 0x8fa7cf,
-  shoes: 0x6b5a4e,
-  cheek: 0xffb3b3,
+  skin: 0xffe4d6,
+  hair: 0x7b543f,
+  shirt: 0xf8f1e6,
+  pants: 0xa9bda6,
+  shoes: 0x8b6a56,
+  cheek: 0xf8b7b3,
   eye: 0x3a302a,
 };
 
