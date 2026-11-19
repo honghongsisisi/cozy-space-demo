@@ -35,8 +35,59 @@ export class Sound {
     }
   }
 
+  // ---- 빗소리 ----
+  // 원리: 2초짜리 '쏴아' 잡음을 끝없이 되풀이하고, 높은 소리를 깎아 멀리서 내리는 비처럼 부드럽게 만듦.
+  // 그 위에 아주 작은 '톡' 소리(빗방울)를 가끔씩 무작위로 섞음.
+  setRain(on) {
+    this.wantRain = on;
+    if (!this.ctx) return;
+    if (!this.rainGain) this.buildRain();
+    const target = on && this.enabled ? 0.55 : 0;
+    if (this.rainTarget !== target) {
+      this.rainTarget = target;
+      this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
+    }
+  }
+
+  buildRain() {
+    const c = this.ctx, len = c.sampleRate * 2;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = last * 0.96 + (Math.random() * 2 - 1) * 0.2; d[i] = last; } // 부드러운 잡음
+    // 이어 붙이는 자리에서 '틱' 소리가 나지 않게 앞뒤를 살짝 겹쳐 줌
+    for (let i = 0; i < 2000; i++) { const k = i / 2000; d[i] = d[i] * k + d[len - 2000 + i] * (1 - k); }
+    const src = c.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 250;
+    this.rainGain = c.createGain(); this.rainGain.gain.value = 0;
+    src.connect(hp).connect(lp).connect(this.rainGain).connect(this.master);
+    src.start();
+    this.rainTarget = 0;
+    const drop = () => {
+      if (this.rainTarget > 0) this.droplet();
+      setTimeout(drop, 60 + Math.random() * 260);
+    };
+    drop();
+  }
+
+  droplet() {
+    const c = this.ctx, t = c.currentTime;
+    const src = c.createBufferSource(); src.buffer = this.noise;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2500 + Math.random() * 3000; bp.Q.value = 3;
+    const g = c.createGain();
+    const v = 0.05 + Math.random() * 0.08;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    src.connect(bp).connect(g).connect(this.rainGain);
+    src.start(t, Math.random() * 0.9, 0.06);
+  }
+
   setEnabled(on) {
     this.enabled = on;
+    if (this.ctx && this.wantRain !== undefined) this.setRain(this.wantRain);
     try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* 무시 */ }
   }
 

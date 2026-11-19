@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.8';
-import { Avatar } from './avatar.js?v=0.8';
-import { Environment } from './environment.js?v=0.8';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.8';
-import { saveState, loadState, clearState } from './storage.js?v=0.8';
-import { Sound } from './sound.js?v=0.8';
-import { fmt } from './realtime.js?v=0.8';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.9';
+import { Avatar } from './avatar.js?v=0.9';
+import { Environment } from './environment.js?v=0.9';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.9';
+import { saveState, loadState, clearState } from './storage.js?v=0.9';
+import { Sound } from './sound.js?v=0.9';
+import { fmt } from './realtime.js?v=0.9';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -274,6 +274,7 @@ const PANES = {
 };
 let panelOpen = false, currentPane = null;
 function openPanel(pane) {
+  if (pane === 'furniture' && role === 'guest') { toast('꾸미기는 섬 주인만 할 수 있어요'); return; }
   panelOpen = !!pane; currentPane = pane;
   panel.classList.toggle('hidden', !pane);
   if (pane) {
@@ -445,6 +446,20 @@ weatherSeg.addEventListener('click', (e) => {
 timeFlow.addEventListener('change', () => { env.flowing = timeFlow.checked; if (env.flowing) env.realTime = false; refreshEnvButtons(); scheduleSave(); });
 refreshEnvButtons();
 
+// ---------- 주인 / 손님 ----------
+// 규칙: 섬의 시간·날씨·꾸미기는 주인(방장)이 정하고, 놀러 온 손님은 바꿀 수 없음.
+// 지금은 언제나 주인. 나중에 방문 기능을 만들면 친구 섬에 들어갈 때 setRole('guest')만 부르면 됨.
+let role = 'owner';
+function setRole(r) {
+  role = r;
+  const guest = r === 'guest';
+  document.querySelectorAll('#env-panel button, #env-panel input').forEach((el) => { el.disabled = guest; });
+  document.getElementById('env-panel').title = guest ? '시간과 날씨는 섬 주인이 정해요' : '';
+  document.querySelectorAll('.rail-sub [data-sub="furniture"], #btn-reset, #btn-title-edit').forEach((el) => { el.disabled = guest; });
+  if (guest && currentPane === 'furniture') openPanel(null);
+}
+setRole(role);
+
 // ---------- 기타 버튼 ----------
 document.getElementById('btn-wave').addEventListener('click', () => avatar.wave());
 document.getElementById('btn-jump').addEventListener('click', () => avatar.jump());
@@ -610,6 +625,7 @@ function frame() {
     if (markerT <= 0 || !avatar.target) marker.visible = false;
   }
   updateTools();
+  sound.setRain(env.weather === 'rain'); // 비가 오면 빗소리
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -617,4 +633,4 @@ frame();
 document.getElementById('loading').classList.add('done');
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, saveNow, sound };
+window.cozy = { world, avatar, env, cam, saveNow, sound, setRole };

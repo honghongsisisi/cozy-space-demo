@@ -99,7 +99,7 @@ button { cursor: pointer; }
 }
 .chat-mode, .chat-send { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 5px 8px; font-size: 12.5px; }
 .chat-input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; background: #fff; }
-.chatbar :disabled { opacity: 0.65; cursor: not-allowed; }
+.chatbar :disabled, #env-panel :disabled, .rail :disabled, .wide-btn:disabled, .chip-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ③ 펼쳐지는 창 */
 .panel {
