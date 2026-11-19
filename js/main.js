@@ -76,9 +76,18 @@ window.addEventListener('beforeunload', () => saveNow(false));
 
 // ---------- 키보드 ----------
 const keys = new Set();
+const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+let lastTap = { key: null, t: 0 };
+let lastClick = { x: 0, y: 0, t: 0 };
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
+  // 같은 이동 키를 빠르게 두 번 누르면 달리기
+  if (MOVE_KEYS.has(k) && !e.repeat) {
+    const now = performance.now();
+    if (lastTap.key === k && now - lastTap.t < 350) avatar.running = true;
+    lastTap = { key: k, t: now };
+  }
   keys.add(k);
   if (k === ' ') { e.preventDefault(); avatar.jump(); }
   if (k === '1') avatar.wave();
@@ -198,6 +207,10 @@ function handleClick(e) {
   const p = groundPoint(e);
   if (p) {
     const c = clampToPlot(p.x, p.z);
+    // 땅을 빠르게 두 번 클릭하면 달려감
+    const now = performance.now();
+    avatar.running = now - lastClick.t < 350 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 40;
+    lastClick = { x: e.clientX, y: e.clientY, t: now };
     avatar.moveTo(c.x, c.z);
     marker.position.set(avatar.target.x, 0.03, avatar.target.y);
     marker.visible = true;

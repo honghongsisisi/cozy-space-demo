@@ -4,7 +4,8 @@ import { mat } from './catalog.js';
 import { PALETTE as P } from './palette.js';
 import { PLOT_RADIUS } from './world.js';
 
-const SPEED = 4.2;
+const SPEED = 4.2;     // 걷기 속도
+const RUN_SPEED = 8;   // 달리기 속도
 
 export class Avatar {
   constructor(scene) {
@@ -92,6 +93,7 @@ export class Avatar {
     this.vy = 0;
     this.y = 0;
     this.walkT = 0;
+    this.running = false; // 달리는 중인지
     this.waveT = 0;
     this.moving = false;
   }
@@ -120,13 +122,15 @@ export class Avatar {
       dz = this.target.y - p.z;
       const len = Math.hypot(dx, dz);
       if (len < 0.08) { this.target = null; dx = dz = 0; }
-      else { const k = Math.min(1, len / (SPEED * dt)); dx = (dx / len) * k; dz = (dz / len) * k; }
+      else { const k = Math.min(1, len / ((this.running ? RUN_SPEED : SPEED) * dt)); dx = (dx / len) * k; dz = (dz / len) * k; }
     }
 
     this.moving = dx !== 0 || dz !== 0;
+    if (!this.moving) this.running = false; // 멈추면 다시 걷기로
     if (this.moving) {
-      p.x += dx * SPEED * dt;
-      p.z += dz * SPEED * dt;
+      const sp = this.running ? RUN_SPEED : SPEED;
+      p.x += dx * sp * dt;
+      p.z += dz * sp * dt;
       const want = Math.atan2(dx, dz);
       let diff = want - this.facing;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -158,14 +162,18 @@ export class Avatar {
     // 걷는 모양
     const walking = this.moving && this.y === 0;
     const prevStep = Math.floor(this.walkT / Math.PI);
-    this.walkT += dt * (walking ? 9 : 0);
+    const run = walking && this.running;
+    this.walkT += dt * (walking ? (run ? 14 : 9) : 0); // 달리면 발걸음(=발소리)도 빨라짐
     // 발이 땅에 닿는 순간마다 발소리
     if (walking && Math.floor(this.walkT / Math.PI) !== prevStep && this.onStep) this.onStep();
-    const swing = walking ? Math.sin(this.walkT) * 0.5 : 0;
+    const swing = walking ? Math.sin(this.walkT) * (run ? 0.95 : 0.5) : 0;
     this.legL.rotation.x = lerp(this.legL.rotation.x, swing, 0.3);
     this.legR.rotation.x = lerp(this.legR.rotation.x, -swing, 0.3);
     this.armL.rotation.x = lerp(this.armL.rotation.x, -swing * 0.8, 0.3);
-    const bob = walking ? Math.abs(Math.sin(this.walkT)) * 0.06 : Math.sin(performance.now() / 600) * 0.012;
+    // 달릴 때: 팔꿈치를 굽힌 듯 팔을 앞으로 모으고, 몸을 살짝 앞으로 숙임
+    this.armL.rotation.z = lerp(this.armL.rotation.z, run ? -0.25 : -0.08, 0.2);
+    this.body.rotation.x = lerp(this.body.rotation.x, run ? 0.14 : 0, 0.15);
+    const bob = walking ? Math.abs(Math.sin(this.walkT)) * (run ? 0.11 : 0.06) : Math.sin(performance.now() / 600) * 0.012;
     this.body.position.y = this.y + bob;
     this.head.rotation.z = walking ? Math.sin(this.walkT) * 0.05 : 0;
 
