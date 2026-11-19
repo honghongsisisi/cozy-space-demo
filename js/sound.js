@@ -119,32 +119,44 @@ export class Sound {
     try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* 무시 */ }
   }
 
+  // 발소리: '통' 하고 가볍게 튀는 소리 + 낙엽을 살짝 밟는 작은 '바스락'.
+  // 원리: ① '통' = 아주 짧은 낮은 음(약 0.05초)이 살짝 내려가며 사라짐 (말랑한 공이 튀는 느낌)
+  //       ② '바스락' = 잡음을 아주 짧게, 높은 음만 남겨 작게
+  //       왼발·오른발 음 높이를 조금씩 다르게 해서 '통, 통' 리듬이 귀엽게 들리게.
   footstep() {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const c = this.ctx, t = c.currentTime;
+    this.stepSide = !this.stepSide;
+
+    // ① 통
+    const o = c.createOscillator();
+    o.type = 'sine';
+    const f0 = (this.stepSide ? 300 : 260) * (0.95 + Math.random() * 0.1);
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.6, t + 0.06);
+    const og = c.createGain();
+    const ov = 0.42 + Math.random() * 0.08;
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(ov, t + 0.004);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
+    const olp = c.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 1200;
+    o.connect(olp).connect(og).connect(this.master);
+    o.start(t); o.stop(t + 0.09);
+
+    // ② 바스락 (작고 짧게)
     const src = c.createBufferSource();
     src.buffer = this.noise;
-    src.playbackRate.value = 0.8 + Math.random() * 0.4;
-
-    const hp = c.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1800 + Math.random() * 600;
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 3200 + Math.random() * 2200;
-    bp.Q.value = 0.9;
-
+    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600 + Math.random() * 1400; bp.Q.value = 1.1;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5000;
     const g = c.createGain();
-    const dur = 0.07 + Math.random() * 0.05;
-    const vol = 0.5 + Math.random() * 0.3;
-    // 빠르게 커졌다가 천천히 사라짐 + 중간에 한 번 더 '삭'
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(vol * 0.25, t + dur * 0.45);
-    g.gain.exponentialRampToValueAtTime(vol * 0.6, t + dur * 0.55);
+    const dur = 0.05 + Math.random() * 0.03, vol = 0.16 + Math.random() * 0.08;
+    g.gain.setValueAtTime(0.0001, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(vol * 0.35, t + dur * 0.5);
+    g.gain.exponentialRampToValueAtTime(vol * 0.6, t + dur * 0.62);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-
-    src.connect(hp).connect(bp).connect(g).connect(this.master);
+    src.connect(bp).connect(lp).connect(g).connect(this.master);
     src.start(t, Math.random() * 0.8, dur + 0.02);
   }
 }
