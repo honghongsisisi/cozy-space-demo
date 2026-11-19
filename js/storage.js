@@ -1,6 +1,6 @@
 // 브라우저에 저장하기 / 불러오기
 // 나중에 친구 방문 기능을 만들 때는 이 파일만 서버 저장으로 바꾸면 됩니다.
-import { OUTER_NATURE, newId } from './world.js?v=0.24';
+import { OUTER_NATURE, newId } from './world.js?v=0.25';
 
 const KEY = 'cozy-space-demo:v1';
 

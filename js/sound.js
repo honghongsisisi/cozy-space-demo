@@ -40,14 +40,13 @@ export class Sound {
   // 원리: 8초짜리 빗소리를 미리 한 번 '그려서' 만들어 두고 끝없이 이어 틉니다.
   //  ① 잔빗방울: 아주 짧고 작은 '톡' 소리 수백 개 (나뭇잎에 스치는 비)
   //  ② 잎사귀 방울: 부드러운 '투둑' 가끔 (음 높이가 없는 소리라 통통 튀지 않음)
-  //  ③ 처마 방울: 더 낮고 둥근 '툭' 아주 가끔
-  //  ④ 바탕: 멀리서 들리는 먹먹한 비 (천천히 커졌다 작아졌다)
+  //  ③ 바탕: 아주 작고 가벼운 빗소리 (낮게 울리는 소리는 빼서 천둥 느낌 없음)
   // 빗방울 자리를 8초 안에서 돌려 붙여서, 이어 틀 때 이음새가 들리지 않습니다.
   setRain(on) {
     this.wantRain = on;
     if (!this.ctx) return;
     if (!this.rainGain) this.buildRain();
-    const target = on && this.enabled ? 0.55 : 0; // 발소리보다 작게
+    const target = on && this.enabled ? 0.8 : 0; // 발소리보다 작게
     if (this.rainTarget !== target) {
       this.rainTarget = target;
       this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
@@ -61,16 +60,13 @@ export class Sound {
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const put = (i, v, pan) => { const k = ((i % len) + len) % len; L[k] += v * (1 - pan); R[k] += v * (1 + pan); };
 
-    // ④ 바탕: 두 번 낮게 거른 잡음 + 4초에 한 번 숨 쉬듯 크기 변화 (8초에 딱 2번이라 이음새 없음)
+    // ③ 바탕: 가볍게 거른 잡음을 아주 작게
     let a1 = 0, a2 = 0, b1 = 0, b2 = 0;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < len; i++) {
-        a1 += 0.06 * ((rnd() * 2 - 1) - a1); a2 += 0.06 * (a1 - a2);
-        b1 += 0.06 * ((rnd() * 2 - 1) - b1); b2 += 0.06 * (b1 - b2);
-        if (pass === 1) {
-          const swell = 0.75 + 0.25 * Math.sin((i / len) * Math.PI * 4);
-          L[i] = a2 * 0.35 * swell; R[i] = b2 * 0.35 * swell;
-        }
+        a1 += 0.2 * ((rnd() * 2 - 1) - a1); a2 += 0.2 * (a1 - a2);
+        b1 += 0.2 * ((rnd() * 2 - 1) - b1); b2 += 0.2 * (b1 - b2);
+        if (pass === 1) { L[i] = a2 * 0.07; R[i] = b2 * 0.07; } // 낮게 울리는 소리 없이, 아주 작고 가벼운 바탕만
       }
     }
     // ① 잔빗방울: 1초에 약 120개, 2~6ms짜리 작은 '톡'
@@ -80,7 +76,7 @@ export class Sound {
       let y = 0;
       for (let j = 0; j < dur; j++) { y += cut * ((rnd() * 2 - 1) - y); put(at + j, y * amp * Math.exp(-j / (dur * 0.3)), pan); }
     }
-    // ②③ 큰 빗방울: 음 높이가 들리지 않게(통통 튀지 않게) '잡음'을 낮게 두 번 걸러서 만든 부드럽고 둥근 '투둑'
+    // ② 잎사귀 방울: 음 높이가 들리지 않게(통통 튀지 않게) 잡음을 걸러 만든 가볍고 짧은 '투둑'
     const softDrop = (count, cutLo, cutHi, ampLo, ampHi, decay) => {
       for (let n = 0; n < count; n++) {
         const at = Math.floor(rnd() * len), dur = Math.floor(sr * decay * 5);
@@ -94,12 +90,12 @@ export class Sound {
         }
       }
     };
-    softDrop(8 * 5, 0.05, 0.1, 0.25, 0.5, 0.016); // 잎에 떨어지는 방울: 1초에 약 5개
-    softDrop(8 * 1, 0.025, 0.045, 0.5, 0.8, 0.03); // 처마 방울: 1초에 약 1개, 더 낮고 둥글게
+    softDrop(8 * 6, 0.14, 0.24, 0.12, 0.22, 0.009); // 잎에 떨어지는 방울: 1초에 약 6개, 가볍고 짧게
+    // (처마의 낮은 '툭'은 천둥처럼 들릴 수 있어서 뺐음)
     const src = c.createBufferSource();
     src.buffer = buf; src.loop = true;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 0.5; // 날카로운 높은 소리는 걸러서 포근하게
-    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320; // 낮게 울리는 소리(우르릉)는 모두 걸러 냄
     this.rainGain = c.createGain(); this.rainGain.gain.value = 0;
     this.rainGain.connect(this.master);
     src.connect(hp).connect(lp).connect(this.rainGain);
