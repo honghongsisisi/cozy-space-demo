@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js';
 import { Avatar } from './avatar.js';
 import { Environment } from './environment.js';
-import { ITEMS, ITEM_BY_TYPE, buildItem } from './catalog.js';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js';
 import { saveState, loadState, clearState } from './storage.js';
 import { Sound } from './sound.js';
 
@@ -20,17 +20,19 @@ const world = new World(scene);
 const avatar = new Avatar(scene);
 const env = new Environment(scene, world);
 
+const viewport = document.getElementById('viewport');
 function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = Math.max(1, viewport.clientWidth), h = Math.max(1, viewport.clientHeight);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
-window.addEventListener('resize', resize);
+// 창이 펼쳐지거나 접혀서 3D 화면 크기가 바뀌면 다시 맞춤
+new ResizeObserver(resize).observe(viewport);
 resize();
 
 // ---------- 카메라 (아바타를 따라다님) ----------
-const cam = { yaw: 0, pitch: 0.55, dist: 17, target: new THREE.Vector3(0, 1, 3) };
+const cam = { yaw: 0, pitch: 0.5, dist: 19, target: new THREE.Vector3(0, 1, 3) };
 function updateCamera(dt) {
   const want = avatar.position.clone().add(new THREE.Vector3(0, 1.3, 0));
   cam.target.lerp(want, Math.min(1, dt * 6));
@@ -46,7 +48,7 @@ function updateCamera(dt) {
 // ---------- 저장 ----------
 let saveTimer = null;
 function currentState() {
-  return { items: world.serialize(), env: env.serialize(), avatar: avatar.serialize(), cam: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist } };
+  return { title: roomTitle, items: world.serialize(), env: env.serialize(), avatar: avatar.serialize(), cam: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist } };
 }
 function saveNow(showToast) {
   const ok = saveState(currentState());
@@ -58,8 +60,10 @@ function scheduleSave() {
 }
 world.onChange(scheduleSave);
 
+let roomTitle = '나의 작은 섬';
 const saved = loadState();
 if (saved) {
+  if (saved.title) roomTitle = saved.title;
   world.apply({ type: 'replaceAll', items: saved.items || [] }, { silent: true });
   env.restore(saved.env);
   avatar.restore(saved.avatar);
@@ -78,15 +82,15 @@ window.addEventListener('keydown', (e) => {
   keys.add(k);
   if (k === ' ') { e.preventDefault(); avatar.jump(); }
   if (k === '1') avatar.wave();
-  if (k === 'i') setSide(!sideOpen);
-  if (k === 'r') rotateCurrent();
+  if (k === 'i') openPanel(panelOpen && currentPane === 'furniture' ? null : 'furniture');
+  if (k === 'r') rotateCurrent(e.shiftKey ? 45 : 15);
   if (k === 'm' && selectedId) startMove(selectedId);
   if ((k === 'delete' || k === 'backspace') && selectedId) removeSelected();
   if (k === 'escape') {
     if (!help.classList.contains('hidden')) help.classList.add('hidden');
     else if (placing) stopPlacing(true);
     else if (selectedId) select(null);
-    else if (sideOpen) setSide(false);
+    else if (panelOpen) openPanel(null);
   }
   if (k.startsWith('arrow')) e.preventDefault();
 });
@@ -151,6 +155,7 @@ canvas.addEventListener('pointermove', (e) => {
     }
   }
   if (placing && e.pointerType === 'mouse') updateGhost(e);
+  lastShift = e.shiftKey;
 });
 canvas.addEventListener('pointerup', (e) => {
   pointers.delete(e.pointerId);
@@ -201,45 +206,82 @@ function handleClick(e) {
 }
 
 // ---------- 꾸미기 ----------
-const side = document.getElementById('side');
-const sideTabs = document.getElementById('side-tabs');
 const drawerHint = document.getElementById('drawer-hint');
 const btnCancel = document.getElementById('btn-cancel-place');
-const itemGrid = document.getElementById('item-grid');
+const folders = document.getElementById('item-folders');
 const tools = document.getElementById('item-tools');
 
 let decorating = false;
 let placing = null; // { type, rot, movingId, ghost }
 let selectedId = null;
+let gridOn = false;   // 격자 보이기 (배치는 격자와 상관없이 자유)
+let lastShift = false;
 
-ITEMS.forEach((it) => {
-  const b = document.createElement('button');
-  b.className = 'item-card';
-  b.dataset.type = it.type;
-  b.innerHTML = `<span class="emoji">${it.emoji}</span><span>${it.name}</span>`;
-  b.addEventListener('click', () => startPlacing(it.type));
-  itemGrid.appendChild(b);
+// 격자 켜기/끄기 버튼
+const gridBtn = document.createElement('button');
+gridBtn.className = 'chip-btn grid-toggle';
+function refreshGridBtn() { gridBtn.textContent = gridOn ? '▦ 격자 보기: 켬' : '▦ 격자 보기: 끔'; world.grid.visible = decorating && gridOn; }
+gridBtn.addEventListener('click', () => { gridOn = !gridOn; refreshGridBtn(); });
+folders.before(gridBtn);
+
+// 분류 폴더별로 물건 카드 만들기
+ITEM_GROUPS.forEach((g) => {
+  const list = ITEMS.filter((it) => it.group === g.id);
+  const f = document.createElement('div');
+  f.className = 'folder';
+  f.innerHTML = `<div class="folder-head">📂 ${g.name} (${list.length})</div><div class="item-grid"></div>`;
+  f.querySelector('.folder-head').addEventListener('click', () => f.classList.toggle('closed'));
+  const grid = f.querySelector('.item-grid');
+  list.forEach((it) => {
+    const b = document.createElement('button');
+    b.className = 'item-card';
+    b.dataset.type = it.type;
+    b.innerHTML = `<span class="emoji">${it.emoji}</span><span>${it.name}</span>`;
+    b.addEventListener('click', () => startPlacing(it.type));
+    grid.appendChild(b);
+  });
+  folders.appendChild(f);
 });
 
-// 서랍이 열려 있고 '가구' 탭일 때만 꾸미기 상태
-let sideOpen = false, sideTab = 'furniture';
 function setDecorating(on) {
   decorating = on;
-  world.grid.visible = on;
+  refreshGridBtn();
   if (!on) { stopPlacing(true); select(null); }
 }
-function setSide(open, tab = sideTab) {
-  sideOpen = open; sideTab = tab;
-  side.classList.toggle('open', open);
-  sideTabs.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-  side.querySelectorAll('.side-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
-  setDecorating(open && tab === 'furniture');
+
+// ---------- 오른쪽 메뉴와 펼쳐지는 창 ----------
+const panel = document.getElementById('panel');
+const panelTitle = document.getElementById('panel-title');
+const rail = document.getElementById('rail');
+const railSub = document.getElementById('rail-sub');
+const PANES = {
+  space: '🏝️ 내 공간', friends: '👫 친구', manage: '⚙️ 관리',
+  furniture: '🎁 아이템 · 가구', closet: '🎁 아이템 · 옷장', shop: '🎁 아이템 · 상점',
+};
+let panelOpen = false, currentPane = null;
+function openPanel(pane) {
+  panelOpen = !!pane; currentPane = pane;
+  panel.classList.toggle('hidden', !pane);
+  if (pane) {
+    panelTitle.textContent = PANES[pane];
+    panel.querySelectorAll('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
+    if (pane === 'space') refreshSpaceInfo();
+  }
+  const isItem = ['furniture', 'closet', 'shop'].includes(pane);
+  rail.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('on', b.dataset.cat === pane || (b.dataset.cat === 'items' && isItem)));
+  rail.querySelector('.rail-group').classList.toggle('open', isItem);
+  railSub.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.sub === pane));
+  setDecorating(pane === 'furniture');
 }
-document.getElementById('side-handle').addEventListener('click', () => setSide(!sideOpen));
-document.getElementById('side-close').addEventListener('click', () => setSide(false));
-sideTabs.addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (b) setSide(true, b.dataset.tab);
+rail.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  let pane = b.dataset.sub || b.dataset.cat;
+  if (pane === 'items') pane = 'furniture';
+  // 같은 메뉴를 다시 누르면 접힘
+  if (panelOpen && (pane === currentPane || (b.dataset.cat === 'items' && ['furniture', 'closet', 'shop'].includes(currentPane)))) openPanel(null);
+  else openPanel(pane);
 });
+document.getElementById('panel-close').addEventListener('click', () => openPanel(null));
 
 function makeGhost(type) {
   const g = buildItem(type);
@@ -260,14 +302,14 @@ function startPlacing(type, movingId = null, rot = 0) {
   stopPlacing(true);
   select(null);
   placing = { type, rot, movingId, ghost: makeGhost(type) };
-  placing.ghost.rotation.y = rot * Math.PI / 4;
+  placing.ghost.rotation.y = rot * Math.PI / 180;
   if (movingId) world.items.get(movingId).obj.visible = false;
-  drawerHint.textContent = movingId ? '옮길 곳을 클릭하세요 · R 돌리기' : `${ITEM_BY_TYPE[type].name}: 놓을 곳을 클릭하세요 · R 돌리기`;
+  drawerHint.textContent = movingId ? '옮길 곳을 클릭하세요' : `${ITEM_BY_TYPE[type].name}: 놓을 곳을 클릭하세요`;
   btnCancel.classList.remove('hidden');
-  itemGrid.querySelectorAll('.item-card').forEach((c) => c.classList.toggle('on', c.dataset.type === type && !movingId));
+  folders.querySelectorAll('.item-card').forEach((c) => c.classList.toggle('on', c.dataset.type === type && !movingId));
   // 터치 화면에서는 마우스 따라다니기가 없으니 아바타 앞에 미리 보여 줌
   const fx = avatar.position.x + Math.sin(avatar.facing) * 1.5, fz = avatar.position.z + Math.cos(avatar.facing) * 1.5;
-  const c = clampToPlot(snap(fx), snap(fz));
+  const c = clampToPlot(fx, fz);
   placing.ghost.position.set(c.x, 0, c.z);
   placing.ghost.visible = true;
 }
@@ -279,14 +321,15 @@ function stopPlacing(cancel) {
   placing = null;
   drawerHint.textContent = '놓고 싶은 물건을 고르세요';
   btnCancel.classList.add('hidden');
-  itemGrid.querySelectorAll('.item-card').forEach((c) => c.classList.remove('on'));
+  folders.querySelectorAll('.item-card').forEach((c) => c.classList.remove('on'));
 }
 btnCancel.addEventListener('click', () => stopPlacing(true));
 
 function updateGhost(e) {
   const p = groundPoint(e);
   if (!p || !placing) return;
-  const c = clampToPlot(snap(p.x), snap(p.z));
+  // 기본은 어디든 자유롭게. Shift를 누르고 있을 때만 격자 칸에 맞춤
+  const c = e.shiftKey ? clampToPlot(snap(p.x), snap(p.z)) : clampToPlot(p.x, p.z);
   placing.ghost.position.set(c.x, 0, c.z);
   placing.ghost.visible = true;
 }
@@ -307,13 +350,14 @@ function placeGhost() {
   }
 }
 
-function rotateCurrent() {
+// 돌리기: R은 15도씩, Shift+R은 45도씩
+function rotateCurrent(step = 15) {
   if (placing) {
-    placing.rot = (placing.rot + 1) % 8;
-    placing.ghost.rotation.y = placing.rot * Math.PI / 4;
+    placing.rot = (placing.rot + step) % 360;
+    placing.ghost.rotation.y = placing.rot * Math.PI / 180;
   } else if (selectedId) {
     const it = world.items.get(selectedId);
-    world.apply({ type: 'update', id: selectedId, patch: { rot: (it.data.rot + 1) % 8 } });
+    world.apply({ type: 'update', id: selectedId, patch: { rot: (it.data.rot + step) % 360 } });
   }
 }
 
@@ -341,7 +385,7 @@ function removeSelected() {
 tools.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.dataset.tool === 'rotate') rotateCurrent();
+  if (t.dataset.tool === 'rotate') rotateCurrent(e.shiftKey ? 45 : 15);
   if (t.dataset.tool === 'move') startMove(selectedId);
   if (t.dataset.tool === 'remove') removeSelected();
 });
@@ -354,8 +398,8 @@ function updateTools() {
   selRing.scale.setScalar(r / 0.7);
   selRing.position.set(it.data.x, 0.03, it.data.z);
   const v = new THREE.Vector3(it.data.x, 2.6, it.data.z).project(camera);
-  tools.style.left = ((v.x + 1) / 2) * window.innerWidth + 'px';
-  tools.style.top = ((1 - v.y) / 2) * window.innerHeight + 'px';
+  tools.style.left = ((v.x + 1) / 2) * viewport.clientWidth + 'px';
+  tools.style.top = ((1 - v.y) / 2) * viewport.clientHeight + 'px';
 }
 
 // ---------- 시간·날씨 버튼 ----------
@@ -383,14 +427,65 @@ refreshEnvButtons();
 
 // ---------- 기타 버튼 ----------
 document.getElementById('btn-wave').addEventListener('click', () => avatar.wave());
+document.getElementById('btn-jump').addEventListener('click', () => avatar.jump());
+document.getElementById('btn-respawn').addEventListener('click', () => { avatar.restore({ x: 0, z: 3, facing: 0 }); avatar.target = null; toast('처음 자리로 왔어요'); });
+document.getElementById('btn-full').addEventListener('click', () => {
+  const app = document.getElementById('app');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (app.requestFullscreen) app.requestFullscreen().catch(() => toast('이 브라우저에서는 전체화면을 쓸 수 없어요'));
+});
+// 아직 없는 기능 버튼들
+document.querySelectorAll('.soon').forEach((b) => b.addEventListener('click', () => toast(`${b.dataset.soon || '이 기능'}은(는) 준비 중이에요`)));
+
+// 섬 제목 고치기
+const titleEl = document.getElementById('room-title');
+const titleInput = document.getElementById('room-title-input');
+const titleBtn = document.getElementById('btn-title-edit');
+function showTitle() { titleEl.textContent = roomTitle; document.title = `${roomTitle} (데모)`; }
+function finishTitle(save) {
+  if (save) { roomTitle = titleInput.value.trim() || roomTitle; scheduleSave(); }
+  titleInput.classList.add('hidden'); titleEl.classList.remove('hidden'); titleBtn.textContent = '수정';
+  showTitle();
+}
+titleBtn.addEventListener('click', () => {
+  if (!titleInput.classList.contains('hidden')) return finishTitle(true);
+  titleInput.value = roomTitle;
+  titleEl.classList.add('hidden'); titleInput.classList.remove('hidden'); titleBtn.textContent = '완료';
+  titleInput.focus(); titleInput.select();
+});
+titleInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') finishTitle(true);
+  if (e.key === 'Escape') finishTitle(false);
+  e.stopPropagation();
+});
+showTitle();
+function refreshSpaceInfo() {
+  document.getElementById('space-title').textContent = roomTitle;
+  document.getElementById('space-count').textContent = `${world.items.size}개`;
+}
+
+// 아래 소식줄 (지금은 고정 문구, 나중에 서버 소식으로)
+document.getElementById('ticker-text').innerHTML = [
+  '🏝️ 나의 작은 섬 데모에 오신 걸 환영해요',
+  '🎁 오른쪽 아이템 → 가구에서 섬을 꾸며 보세요',
+  '🌙 밤이 되면 등불이 켜지고 하늘에 방울이 떠올라요',
+  '📷 마음에 드는 장면은 사진으로 남겨 보세요',
+  '👫 친구 섬 놀러 가기는 다음 단계에서 열려요',
+].join('<i>·</i>');
 document.getElementById('btn-save').addEventListener('click', () => saveNow(true));
 
 // 소리
 const sound = new Sound();
 avatar.onStep = () => sound.footstep();
 const btnSound = document.getElementById('btn-sound');
-function refreshSoundBtn() { btnSound.textContent = sound.enabled ? '🔊' : '🔇'; }
-btnSound.addEventListener('click', () => { sound.setEnabled(!sound.enabled); refreshSoundBtn(); toast(sound.enabled ? '소리를 켰어요' : '소리를 껐어요'); });
+const btnSound2 = document.getElementById('btn-sound2');
+function refreshSoundBtn() {
+  btnSound.textContent = sound.enabled ? '🔊' : '🔇';
+  btnSound2.textContent = sound.enabled ? '🔊 소리 끄기' : '🔇 소리 켜기';
+}
+const toggleSound = () => { sound.setEnabled(!sound.enabled); refreshSoundBtn(); toast(sound.enabled ? '소리를 켰어요' : '소리를 껐어요'); };
+btnSound.addEventListener('click', toggleSound);
+btnSound2.addEventListener('click', toggleSound);
 refreshSoundBtn();
 
 const btnReset = document.getElementById('btn-reset');
@@ -398,11 +493,11 @@ let resetArmed = null;
 btnReset.addEventListener('click', () => {
   if (!resetArmed) {
     btnReset.textContent = '정말 처음으로? 한 번 더 누르기';
-    resetArmed = setTimeout(() => { resetArmed = null; btnReset.textContent = '↺ 처음으로'; }, 3000);
+    resetArmed = setTimeout(() => { resetArmed = null; btnReset.textContent = '↺ 섬을 처음 모습으로'; }, 3000);
     return;
   }
   clearTimeout(resetArmed); resetArmed = null;
-  btnReset.textContent = '↺ 처음으로';
+  btnReset.textContent = '↺ 섬을 처음 모습으로';
   stopPlacing(true); select(null);
   clearState();
   world.apply({ type: 'replaceAll', items: DEFAULT_ITEMS.map((i) => ({ ...i, id: newId() })) });
@@ -412,6 +507,7 @@ btnReset.addEventListener('click', () => {
 
 const help = document.getElementById('help');
 document.getElementById('btn-help').addEventListener('click', () => help.classList.remove('hidden'));
+document.getElementById('btn-help2').addEventListener('click', () => help.classList.remove('hidden'));
 document.getElementById('btn-help-close').addEventListener('click', () => {
   help.classList.add('hidden');
   try { localStorage.setItem('cozy-space-demo:helped', '1'); } catch (e) { /* 무시 */ }
@@ -460,13 +556,13 @@ function takePhoto() {
     ctx.fillStyle = '#9a8a7a';
     ctx.font = `${Math.round(bottom * 0.36)}px "Apple SD Gothic Neo","Malgun Gothic",sans-serif`;
     ctx.textBaseline = 'middle';
-    ctx.fillText('🌱 나의 작은 마당', pad, img.height + pad + bottom / 2);
+    ctx.fillText('🏝️ ' + roomTitle, pad, img.height + pad + bottom / 2);
     ctx.textAlign = 'right';
     ctx.fillText(stamp, c.width - pad, img.height + pad + bottom / 2);
     const url = c.toDataURL('image/png');
     photoImg.src = url;
     photoDl.href = url;
-    photoDl.download = `마당사진_${stamp.replace(/\./g, '')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
+    photoDl.download = `섬사진_${stamp.replace(/\./g, '')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
     photoModal.classList.remove('hidden');
   };
   img.src = shot;

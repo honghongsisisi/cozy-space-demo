@@ -176,20 +176,27 @@ const builders = {
 
 // radius: 아바타가 부딪히는 크기 (0이면 그냥 지나감)
 export const ITEMS = [
-  { type: 'treeRound', name: '동글나무', emoji: '🌳', radius: 0.45 },
-  { type: 'treePine',  name: '뾰족나무', emoji: '🌲', radius: 0.4 },
-  { type: 'flowers',   name: '꽃밭',     emoji: '🌷', radius: 0 },
-  { type: 'bush',      name: '덤불',     emoji: '🌿', radius: 0.5 },
-  { type: 'rock',      name: '바위',     emoji: '🪨', radius: 0.45 },
-  { type: 'bench',     name: '벤치',     emoji: '🪑', radius: 0.6 },
-  { type: 'lamp',      name: '등불기둥', emoji: '🏮', radius: 0.25 },
-  { type: 'floatLantern', name: '뜬 등불', emoji: '🎐', radius: 0 },
-  { type: 'fence',     name: '울타리',   emoji: '🚧', radius: 0 },
-  { type: 'table',     name: '둥근탁자', emoji: '⚪', radius: 0.55 },
-  { type: 'mailbox',   name: '우체통',   emoji: '📮', radius: 0.3 },
-  { type: 'parasol',   name: '파라솔',   emoji: '⛱️', radius: 0.15 },
-  { type: 'campfire',  name: '모닥불',   emoji: '🔥', radius: 0.5 },
-  { type: 'stepStone', name: '디딤돌',   emoji: '⬜', radius: 0 },
+  { type: 'treeRound', name: '동글나무', emoji: '🌳', radius: 0.45 , group: 'nature' },
+  { type: 'treePine',  name: '뾰족나무', emoji: '🌲', radius: 0.4 , group: 'nature' },
+  { type: 'flowers',   name: '꽃밭',     emoji: '🌷', radius: 0 , group: 'nature' },
+  { type: 'bush',      name: '덤불',     emoji: '🌿', radius: 0.5 , group: 'nature' },
+  { type: 'rock',      name: '바위',     emoji: '🪨', radius: 0.45 , group: 'nature' },
+  { type: 'bench',     name: '벤치',     emoji: '🪑', radius: 0.6 , group: 'furniture' },
+  { type: 'lamp',      name: '등불기둥', emoji: '🏮', radius: 0.25 , group: 'light' },
+  { type: 'floatLantern', name: '뜬 등불', emoji: '🎐', radius: 0 , group: 'light' },
+  { type: 'fence',     name: '울타리',   emoji: '🚧', radius: 0 , group: 'path' },
+  { type: 'table',     name: '둥근탁자', emoji: '⚪', radius: 0.55 , group: 'furniture' },
+  { type: 'mailbox',   name: '우체통',   emoji: '📮', radius: 0.3 , group: 'furniture' },
+  { type: 'parasol',   name: '파라솔',   emoji: '⛱️', radius: 0.15 , group: 'furniture' },
+  { type: 'campfire',  name: '모닥불',   emoji: '🔥', radius: 0.5 , group: 'light' },
+  { type: 'stepStone', name: '디딤돌',   emoji: '⬜', radius: 0 , group: 'path' },
+];
+
+export const ITEM_GROUPS = [
+  { id: 'nature', name: '자연' },
+  { id: 'furniture', name: '가구' },
+  { id: 'light', name: '불빛' },
+  { id: 'path', name: '길·울타리' },
 ];
 
 export const ITEM_BY_TYPE = Object.fromEntries(ITEMS.map((i) => [i.type, i]));

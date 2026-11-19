@@ -9,20 +9,20 @@ export const PLOT_RADIUS = 10; // 둥근 섬의 반지름
 
 export const DEFAULT_ITEMS = [
   { type: 'treeRound', x: -6, z: -5.5, rot: 0 },
-  { type: 'treeRound', x: 6.5, z: -6, rot: 1 },
+  { type: 'treeRound', x: 6.5, z: -6, rot: 45 },
   { type: 'treePine', x: -8, z: 2.5, rot: 0 },
   { type: 'treePine', x: 7.5, z: 4.5, rot: 0 },
   { type: 'floatLantern', x: -3, z: 5, rot: 0 },
   { type: 'floatLantern', x: 5, z: 0, rot: 0 },
   { type: 'flowers', x: -4, z: -3, rot: 0 },
-  { type: 'flowers', x: 4.5, z: -2.5, rot: 2 },
+  { type: 'flowers', x: 4.5, z: -2.5, rot: 90 },
   { type: 'bush', x: -8, z: -1, rot: 0 },
   { type: 'bench', x: 0, z: -6, rot: 0 },
   { type: 'lamp', x: 2, z: -6, rot: 0 },
   { type: 'mailbox', x: 2.5, z: 4, rot: 0 },
   { type: 'stepStone', x: 0, z: 6, rot: 0 },
-  { type: 'stepStone', x: 0.4, z: 7.5, rot: 1 },
-  { type: 'stepStone', x: -0.2, z: 8.3, rot: 2 },
+  { type: 'stepStone', x: 0.4, z: 7.5, rot: 45 },
+  { type: 'stepStone', x: -0.2, z: 8.3, rot: 90 },
   { type: 'lamp', x: -2, z: -6, rot: 0 },
   { type: 'rock', x: 6, z: 2, rot: 0 },
 ];
@@ -78,6 +78,19 @@ export class World {
     this.ripples.position.y = -0.88;
     this.rippleTex = tex;
     this.scene.add(this.ripples);
+    // 두 번째 물결 층: 크기·속도·방향을 조금 다르게 해서 물이 흘러가는 느낌을 줌
+    const tex2 = tex.clone();
+    tex2.needsUpdate = true;
+    tex2.repeat.set(22, 22);
+    tex2.rotation = 0.6;
+    this.ripples2 = new THREE.Mesh(
+      new THREE.CircleGeometry(400, 48),
+      new THREE.MeshBasicMaterial({ map: tex2, transparent: true, opacity: 0.3, depthWrite: false })
+    );
+    this.ripples2.rotation.x = -Math.PI / 2;
+    this.ripples2.position.y = -0.87;
+    this.rippleTex2 = tex2;
+    this.scene.add(this.ripples2);
 
     // 마당: 물 위에 뜬 둥근 섬 (잔디 + 흙 + 나무 테두리)
     const R = PLOT_RADIUS;
@@ -114,8 +127,14 @@ export class World {
   }
 
   update(dt) {
-    this.rippleTex.offset.x += dt * 0.004;
-    this.rippleTex.offset.y += dt * 0.002;
+    // 물결 무늬를 한 방향으로 천천히 흘려 보냄 (그림만 움직여서 가벼움)
+    this.rippleTex.offset.x += dt * 0.045;
+    this.rippleTex.offset.y += dt * 0.012;
+    this.rippleTex2.offset.x += dt * 0.025;
+    this.rippleTex2.offset.y -= dt * 0.008;
+    // 물 높이를 아주 살짝 출렁이게
+    const tt = performance.now() / 1000;
+    this.ripples.position.y = -0.88 + Math.sin(tt * 0.8) * 0.015;
     const t = performance.now() / 1000;
     this.items.forEach(({ obj }) => {
       if (obj.userData.float) obj.userData.float.position.y = 1.3 + Math.sin(t * 1.4 + obj.position.x) * 0.12;
@@ -163,7 +182,7 @@ export class World {
   _place(id) {
     const { data, obj } = this.items.get(id);
     obj.position.set(data.x, 0, data.z);
-    obj.rotation.y = data.rot * (Math.PI / 4); // 한 번 돌릴 때마다 45도
+    obj.rotation.y = data.rot * (Math.PI / 180); // rot = 각도(도)
   }
 
   serialize() {
@@ -203,5 +222,5 @@ export function snap(v) {
 export function clampToPlot(x, z) {
   const lim = PLOT_RADIUS - 0.6, d = Math.hypot(x, z);
   if (d <= lim) return { x, z };
-  return { x: snap((x / d) * lim), z: snap((z / d) * lim) };
+  return { x: (x / d) * lim, z: (z / d) * lim };
 }

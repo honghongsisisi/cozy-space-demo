@@ -3,140 +3,208 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>나의 작은 마당 (데모)</title>
-  <meta name="description" content="작은 마당을 꾸미고 산책하는 3D 웹 데모">
+  <title>나의 작은 섬 (데모)</title>
+  <meta name="description" content="작은 섬을 꾸미고 산책하는 3D 웹 데모">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
 </head>
 <body>
-  <canvas id="scene"></canvas>
+<div id="app">
 
-  <div id="loading">마당을 준비하고 있어요…</div>
+  <!-- ① 맨 위: 섬 제목 바 -->
+  <header class="topbar">
+    <div class="room-info">
+      <span class="room-icon">🏝️</span>
+      <span id="room-title" class="room-title">나의 작은 섬</span>
+      <input id="room-title-input" class="room-title-input hidden" maxlength="20">
+      <button id="btn-title-edit" class="chip-btn">수정</button>
+      <span class="room-visitors" title="방문자 수 (준비 중)">👣 지금 1명 · 오늘 0 · 전체 0</span>
+      <button class="chip-btn soon" data-soon="파티 열기">🎉 파티 열기</button>
+    </div>
+    <div class="room-nav">
+      <button class="chip-btn soon" data-soon="추천하기">💌 추천 0</button>
+      <select class="nav-select soon-select" title="섬 이동 (준비 중)">
+        <option>내 섬</option>
+        <option disabled>친구 섬 (준비 중)</option>
+      </select>
+      <button class="chip-btn soon" data-soon="섬 이동">가기</button>
+      <button class="chip-btn soon" data-soon="아무 섬 구경하기">🎲 아무 섬</button>
+    </div>
+  </header>
 
-  <!-- 왼쪽 위: 제목과 도움말 -->
-  <div class="ui top-left">
-    <div class="title-chip">🌱 나의 작은 마당 <span class="demo-tag">데모</span></div>
-    <button id="btn-help" class="round-btn" title="조작법">?</button>
-  </div>
+  <div class="main">
+    <!-- 3D 화면 -->
+    <section class="viewport" id="viewport">
+      <canvas id="scene"></canvas>
+      <div id="loading">섬을 준비하고 있어요…</div>
 
-  <!-- 오른쪽 위: 시간과 날씨 -->
-  <div class="ui env-panel panel" id="env-panel">
-    <div class="panel-row">
-      <span class="panel-label">시간</span>
-      <div class="seg" id="time-seg">
-        <button data-time="7">아침</button>
-        <button data-time="13">낮</button>
-        <button data-time="18.3">노을</button>
-        <button data-time="22">밤</button>
+      <!-- ② 왼쪽 위 도구줄 -->
+      <div class="toolbar">
+        <button id="btn-photo" class="tool-btn" title="사진 찍기">📷 <span>사진</span></button>
+        <button class="tool-btn soon" data-soon="동영상 찍기" title="동영상 (준비 중)">🎬 <span>동영상</span></button>
+        <button id="btn-save" class="tool-btn" title="저장">💾</button>
+        <button id="btn-sound" class="tool-btn" title="소리 켜기/끄기">🔊</button>
+        <button id="btn-full" class="tool-btn" title="전체화면">⛶ <span>전체화면</span></button>
       </div>
-    </div>
-    <div class="panel-row">
-      <span class="panel-label"></span>
-      <label class="toggle"><input type="checkbox" id="time-flow"> 시간이 흐르게</label>
-    </div>
-    <div class="panel-row">
-      <span class="panel-label">날씨</span>
-      <div class="seg" id="weather-seg">
-        <button data-weather="clear">맑음</button>
-        <button data-weather="cloudy">흐림</button>
-        <button data-weather="rain">비</button>
-        <button data-weather="snow">눈</button>
-        <button data-weather="petals">꽃잎</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- 오른쪽 서랍 창: 평소엔 접혀 있고 손잡이를 누르면 펼쳐짐 -->
-  <aside class="ui side" id="side" aria-label="가구와 옷장">
-    <button class="side-handle" id="side-handle" title="서랍 열기 (I)">
-      <span class="handle-arrow">‹</span>
-      <span class="handle-label">가구<br>옷장</span>
-    </button>
-    <div class="side-body">
-      <div class="side-head">
-        <div class="side-tabs" id="side-tabs">
-          <button data-tab="furniture" class="on">🪑 가구</button>
-          <button data-tab="closet">👕 옷장</button>
+      <!-- 왼쪽 세로 바로가기 -->
+      <div class="quick">
+        <button id="btn-wave" class="quick-btn" title="인사 (1)"><span>👋</span>인사</button>
+        <button id="btn-jump" class="quick-btn" title="점프 (Space)"><span>⤴️</span>점프</button>
+        <button id="btn-help" class="quick-btn" title="조작법"><span>❔</span>도움말</button>
+      </div>
+
+      <!-- 오른쪽 위: 시간·날씨 -->
+      <div class="env-panel" id="env-panel">
+        <div class="seg" id="time-seg">
+          <button data-time="7">아침</button>
+          <button data-time="13">낮</button>
+          <button data-time="18.3">노을</button>
+          <button data-time="22">밤</button>
         </div>
-        <button class="side-close" id="side-close" title="접기 (Esc)">›</button>
+        <div class="seg" id="weather-seg">
+          <button data-weather="clear">맑음</button>
+          <button data-weather="cloudy">흐림</button>
+          <button data-weather="rain">비</button>
+          <button data-weather="snow">눈</button>
+          <button data-weather="petals">꽃잎</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="time-flow"> 시간이 흐르게</label>
       </div>
 
-      <div class="side-pane" data-pane="furniture">
-        <div class="side-hint">
-          <span id="drawer-hint">놓고 싶은 물건을 고르세요</span>
-          <button id="btn-cancel-place" class="small-btn hidden">그만 놓기</button>
-        </div>
-        <div class="item-grid" id="item-grid"></div>
-        <p class="side-tip">놓인 물건을 클릭하면 돌리기 · 옮기기 · 치우기를 할 수 있어요</p>
+      <!-- 선택한 물건 도구 -->
+      <div class="item-tools hidden" id="item-tools">
+        <button data-tool="rotate" title="돌리기 (R)">⟳ 돌리기</button>
+        <button data-tool="move" title="옮기기 (M)">✥ 옮기기</button>
+        <button data-tool="remove" class="danger" title="치우기 (Delete)">🗑 치우기</button>
       </div>
 
-      <div class="side-pane hidden" data-pane="closet">
-        <div class="closet-preview">
-          <div class="closet-figure">🧍</div>
-          <span class="soon-badge">준비 중</span>
-        </div>
-        <div class="closet-cats">
-          <span>머리</span><span>상의</span><span>하의</span><span>신발</span><span>소품</span>
-        </div>
-        <div class="item-grid closet-grid">
-          <div class="slot"></div><div class="slot"></div><div class="slot"></div>
-          <div class="slot"></div><div class="slot"></div><div class="slot"></div>
-        </div>
-        <p class="side-tip">옷 갈아입기는 다음 단계에서 만들 자리예요</p>
+      <!-- ④ 채팅 입력줄 (자리만) -->
+      <div class="chatbar">
+        <select class="chat-mode" disabled><option>말하기</option></select>
+        <input class="chat-input" placeholder="채팅은 친구와 함께 노는 단계에서 열려요" disabled>
+        <button class="chat-send" disabled>보내기</button>
       </div>
+    </section>
+
+    <!-- ③ 넓게 펼쳐지는 창 -->
+    <section class="panel hidden" id="panel">
+      <div class="panel-head">
+        <h3 id="panel-title">아이템</h3>
+        <button class="panel-close" id="panel-close" title="닫기 (Esc)">✕</button>
+      </div>
+      <div class="panel-body" id="panel-body">
+
+        <!-- 아이템 > 가구 -->
+        <div class="pane" data-pane="furniture">
+          <div class="pane-hint">
+            <span id="drawer-hint">놓고 싶은 물건을 고르세요</span>
+            <button id="btn-cancel-place" class="chip-btn hidden">그만 놓기</button>
+          </div>
+          <div id="item-folders"></div>
+          <p class="pane-tip">· 물건을 고른 뒤 땅을 클릭하면 놓여요. <kbd>R</kbd> 돌리기<br>· 놓인 물건을 클릭하면 돌리기 · 옮기기 · 치우기</p>
+        </div>
+
+        <!-- 아이템 > 옷장 -->
+        <div class="pane hidden" data-pane="closet">
+          <div class="closet-preview"><div class="closet-figure">🧍</div><span class="soon-badge">준비 중</span></div>
+          <div class="folder"><div class="folder-head">📂 입은 옷 (0)</div><div class="slot-grid"><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="folder"><div class="folder-head">📂 머리 (0)</div><div class="slot-grid"><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="folder"><div class="folder-head">📂 옷 (0)</div><div class="slot-grid"><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="folder"><div class="folder-head">📂 소품 (0)</div><div class="slot-grid"><i></i><i></i><i></i><i></i><i></i></div></div>
+          <p class="pane-tip">옷 갈아입기는 다음 단계에서 만들 자리예요.</p>
+        </div>
+
+        <!-- 아이템 > 상점 -->
+        <div class="pane hidden" data-pane="shop">
+          <div class="empty-card"><div class="empty-emoji">🛍️</div><b>상점은 준비 중이에요</b><p>입어 보고, 놓아 보고 살 수 있는 상점을 만들 자리예요.</p></div>
+        </div>
+
+        <!-- 내 공간 -->
+        <div class="pane hidden" data-pane="space">
+          <div class="info-card">
+            <div class="info-row"><span>섬 이름</span><b id="space-title">나의 작은 섬</b></div>
+            <div class="info-row"><span>놓인 물건</span><b id="space-count">0개</b></div>
+            <div class="info-row"><span>저장</span><b>이 브라우저에 자동 저장</b></div>
+          </div>
+          <button id="btn-respawn" class="wide-btn">🏠 처음 자리로 돌아가기</button>
+          <button class="wide-btn soon" data-soon="방명록">📒 방명록 <em>준비 중</em></button>
+          <button class="wide-btn soon" data-soon="섬 넓히기">🧭 섬 넓히기 <em>준비 중</em></button>
+        </div>
+
+        <!-- 친구 -->
+        <div class="pane hidden" data-pane="friends">
+          <div class="empty-card"><div class="empty-emoji">👫</div><b>친구 기능은 준비 중이에요</b><p>친구 섬에 놀러 가고, 방명록을 남기는 기능을 만들 자리예요.</p></div>
+        </div>
+
+        <!-- 관리 -->
+        <div class="pane hidden" data-pane="manage">
+          <button id="btn-sound2" class="wide-btn">🔊 소리 켜기/끄기</button>
+          <button id="btn-help2" class="wide-btn">❔ 조작법 보기</button>
+          <button id="btn-reset" class="wide-btn danger">↺ 섬을 처음 모습으로</button>
+          <p class="pane-tip">처음 모습으로 되돌리면 꾸민 물건이 모두 사라져요.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ 오른쪽 세로 메뉴 -->
+    <nav class="rail" id="rail">
+      <button class="rail-btn" data-cat="space"><span>🏝️</span>내 공간</button>
+      <button class="rail-btn" data-cat="friends"><span>👫</span>친구</button>
+      <div class="rail-group">
+        <button class="rail-btn" data-cat="items"><span>🎁</span>아이템</button>
+        <div class="rail-sub" id="rail-sub">
+          <button data-sub="furniture">가구</button>
+          <button data-sub="closet">옷장</button>
+          <button data-sub="shop">상점</button>
+        </div>
+      </div>
+      <button class="rail-btn" data-cat="manage"><span>⚙️</span>관리</button>
+    </nav>
+  </div>
+
+  <!-- ⑤ 맨 아래: 흐르는 소식줄 -->
+  <footer class="ticker">
+    <span class="ticker-label">📢 소식</span>
+    <div class="ticker-track"><div class="ticker-text" id="ticker-text"></div></div>
+    <span class="ticker-event">진행 중인 이벤트가 없어요</span>
+  </footer>
+</div>
+
+<!-- 도움말 -->
+<div class="overlay hidden" id="help">
+  <div class="card">
+    <h2>🏝️ 나의 작은 섬에 오신 걸 환영해요</h2>
+    <ul>
+      <li><b>걷기</b> 땅을 클릭하거나 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</li>
+      <li><b>점프 · 인사</b> <kbd>Space</kbd> · <kbd>1</kbd></li>
+      <li><b>카메라 돌리기</b> 마우스를 누른 채 끌기 (또는 <kbd>Q</kbd><kbd>E</kbd>)</li>
+      <li><b>가까이·멀리</b> 마우스 휠</li>
+      <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
+      <li><b>물건 고치기</b> 가구 창이 열린 동안 놓인 물건을 클릭</li>
+      <li><b>분위기</b> 화면 오른쪽 위에서 시간과 날씨를 바꿔요</li>
+      <li><b>사진</b> 왼쪽 위 📷 버튼</li>
+    </ul>
+    <p class="muted">꾸민 섬은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
+    <button id="btn-help-close" class="main-btn">시작하기</button>
+  </div>
+</div>
+
+<!-- 사진 미리보기 -->
+<div class="overlay hidden" id="photo-modal">
+  <div class="card photo-card">
+    <img id="photo-img" alt="찍은 사진">
+    <div class="photo-actions">
+      <a id="photo-download" class="main-btn" download>⬇ 사진 저장</a>
+      <button id="photo-close" class="main-btn subtle">닫기</button>
     </div>
-  </aside>
-
-  <!-- 선택한 물건 도구 -->
-  <div class="ui item-tools hidden" id="item-tools">
-    <button data-tool="rotate" title="돌리기 (R)">⟳ 돌리기</button>
-    <button data-tool="move" title="옮기기 (M)">✥ 옮기기</button>
-    <button data-tool="remove" class="danger" title="치우기 (Delete)">🗑 치우기</button>
   </div>
+</div>
+<div id="flash"></div>
+<div id="toast"></div>
 
-  <!-- 아래: 메인 버튼 -->
-  <div class="ui bottom-bar">
-    <button id="btn-photo" class="main-btn">📷 사진</button>
-    <button id="btn-wave" class="main-btn">👋 인사</button>
-    <button id="btn-save" class="main-btn">💾 저장</button>
-    <button id="btn-sound" class="main-btn" title="소리 켜기/끄기">🔊</button>
-    <button id="btn-reset" class="main-btn subtle">↺ 처음으로</button>
-  </div>
-
-  <!-- 도움말 -->
-  <div class="overlay hidden" id="help">
-    <div class="card">
-      <h2>🌱 나의 작은 마당에 오신 걸 환영해요</h2>
-      <ul>
-        <li><b>걷기</b> 땅을 클릭하거나 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</li>
-        <li><b>점프</b> <kbd>Space</kbd> · <b>인사</b> <kbd>1</kbd></li>
-        <li><b>카메라 돌리기</b> 마우스를 누른 채 끌기 (또는 <kbd>Q</kbd><kbd>E</kbd>)</li>
-        <li><b>가까이·멀리</b> 마우스 휠</li>
-        <li><b>꾸미기</b> 오른쪽 끝 손잡이(또는 <kbd>I</kbd>)로 서랍 열기 → 물건 고르기 → 땅 클릭. <kbd>R</kbd> 돌리기</li>
-        <li><b>물건 고치기</b> 서랍이 열린 동안 놓인 물건을 클릭 → 돌리기·옮기기·치우기</li>
-        <li><b>분위기</b> 왼쪽 위에서 시간과 날씨를 바꿔 보세요</li>
-        <li><b>사진</b> 📷 버튼으로 지금 화면을 사진으로 남겨요</li>
-      </ul>
-      <p class="muted">꾸민 마당은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
-      <button id="btn-help-close" class="main-btn">시작하기</button>
-    </div>
-  </div>
-
-  <!-- 사진 미리보기 -->
-  <div class="overlay hidden" id="photo-modal">
-    <div class="card photo-card">
-      <img id="photo-img" alt="찍은 사진">
-      <div class="photo-actions">
-        <a id="photo-download" class="main-btn" download>⬇ 사진 저장</a>
-        <button id="photo-close" class="main-btn subtle">닫기</button>
-      </div>
-    </div>
-  </div>
-  <div id="flash"></div>
-  <div id="toast"></div>
-
-  <script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

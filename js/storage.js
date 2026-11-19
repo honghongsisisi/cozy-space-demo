@@ -4,7 +4,7 @@ const KEY = 'cozy-space-demo:v1';
 
 export function saveState(state) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ version: 1, savedAt: Date.now(), ...state }));
+    localStorage.setItem(KEY, JSON.stringify({ version: 2, savedAt: Date.now(), ...state }));
     return true;
   } catch (e) {
     return false;
@@ -16,7 +16,10 @@ export function loadState() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.version === 1 ? s : null;
+    if (!s) return null;
+    // 1판은 회전을 45도 단위 숫자로 저장했음 → 각도로 바꿔 줌
+    if (s.version === 1) { (s.items || []).forEach((it) => { it.rot = (it.rot || 0) * 45; }); s.version = 2; }
+    return s.version === 2 ? s : null;
   } catch (e) {
     return null;
   }

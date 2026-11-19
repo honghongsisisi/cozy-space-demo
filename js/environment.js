@@ -237,6 +237,7 @@ export class Environment {
     // 물은 하늘색을 비춤
     this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
     this.world.ripples.material.opacity = 0.25 + (1 - night) * 0.3;
+    this.world.ripples2.material.opacity = 0.15 + (1 - night) * 0.15;
 
     const sunI = (a.sunI + (b.sunI - a.sunI) * k) * (1 - cl * 0.55);
     const ambI = (a.ambI + (b.ambI - a.ambI) * k) * (1 - cl * 0.2);
