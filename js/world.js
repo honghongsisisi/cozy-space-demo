@@ -2,10 +2,10 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.19';
-import { PALETTE as P } from './palette.js?v=0.19';
+import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.20';
+import { PALETTE as P } from './palette.js?v=0.20';
 
-export const PLOT_RADIUS = 10; // 둥근 섬의 반지름
+export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
 export const DEFAULT_ITEMS = [
   { type: 'treeRound', x: -6, z: -5.5, rot: 0 },
@@ -26,6 +26,23 @@ export const DEFAULT_ITEMS = [
   { type: 'lamp', x: -2, z: -6, rot: 0 },
   { type: 'rock', x: 6, z: 2, rot: 0 },
 ];
+
+// 섬을 넓히면서 바깥쪽에 흩어 둔 자연물 (휑하지 않게). 예전 저장에도 한 번만 더해 줌
+export const OUTER_NATURE = (() => {
+  let v = 23; const r = () => ((v = (v * 9301 + 49297) % 233280) / 233280); // 늘 같은 자리가 나오는 난수
+  const kinds = ['treeRound', 'treePine', 'bush', 'treeRound', 'flowers', 'rock', 'treePine', 'bush', 'flowers'];
+  const out = [];
+  let tries = 0;
+  while (out.length < 26 && tries++ < 400) {
+    const a = r() * Math.PI * 2, d = 11.5 + r() * 6.8;
+    const x = Math.round(Math.cos(a) * d * 10) / 10, z = Math.round(Math.sin(a) * d * 10) / 10;
+    if (out.some((o) => Math.hypot(o.x - x, o.z - z) < 2.6)) continue; // 서로 너무 붙지 않게
+    if (Math.abs(x) < 1.6 && z > 0) continue; // 앞쪽 산책길은 비워 둠
+    out.push({ type: kinds[out.length % kinds.length], x, z, rot: Math.round(r() * 8) * 45 });
+  }
+  return out;
+})();
+DEFAULT_ITEMS.push(...OUTER_NATURE);
 
 let idCounter = 0;
 export function newId() {
@@ -94,11 +111,11 @@ export class World {
 
     // 마당: 물 위에 뜬 둥근 섬 (잔디 + 흙 + 나무 테두리)
     const R = PLOT_RADIUS;
-    const soil = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R - 1.2, 1.6, 40), mat(P.plotSide));
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R - 1.6, 1.6, 72), mat(P.plotSide));
     soil.position.y = -0.82;
     soil.receiveShadow = true;
     this.scene.add(soil);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.1, 48), mat(P.plotGrass));
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.1, 96), mat(P.plotGrass));
     top.position.y = -0.05;
     top.receiveShadow = true;
     this.scene.add(top);

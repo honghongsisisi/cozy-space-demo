@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.19';
-import { glowMat, fireMat } from './catalog.js?v=0.19';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.19';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.20';
+import { glowMat, fireMat } from './catalog.js?v=0.20';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.20';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -46,7 +46,7 @@ export class Environment {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -14; sc.right = sc.top = 14; sc.near = 1; sc.far = 80;
+    sc.left = sc.bottom = -16; sc.right = sc.top = 16; sc.near = 1; sc.far = 90; // 그림자는 캐릭터 주변만 (섬이 넓어도 선명하게)
     this.sun.shadow.radius = 4; // 그림자 가장자리를 부드럽게
     this.sun.shadow.bias = -0.0008;
     this.sun.shadow.normalBias = 0.03;
@@ -275,8 +275,10 @@ export class Environment {
       ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.45, Math.sin(ang)), 0.5)
       : new THREE.Vector3(-0.5, 0.8, -0.6);
     dir.normalize();
-    this.sun.position.copy(dir).multiplyScalar(40);
-    this.sun.target.position.set(0, 0, 0);
+    // 그림자 범위가 캐릭터를 따라다니게 (떨림 없게 2칸 단위로 맞춤)
+    const fx = Math.round(focus.x / 2) * 2, fz = Math.round(focus.z / 2) * 2;
+    this.sun.target.position.set(fx, 0, fz);
+    this.sun.position.copy(dir).multiplyScalar(40).add(this.sun.target.position);
 
     // 달·별·방울
     const clearNight = night * (1 - cl);

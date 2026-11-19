@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.19';
-import { Avatar } from './avatar.js?v=0.19';
-import { Environment } from './environment.js?v=0.19';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.19';
-import { saveState, loadState } from './storage.js?v=0.19';
-import { Sound } from './sound.js?v=0.19';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.19';
-import { fmt } from './realtime.js?v=0.19';
-import { icon, fillIcons } from './icons.js?v=0.19';
-import { makeThumbnails } from './thumbs.js?v=0.19';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.20';
+import { Avatar } from './avatar.js?v=0.20';
+import { Environment } from './environment.js?v=0.20';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.20';
+import { saveState, loadState } from './storage.js?v=0.20';
+import { Sound } from './sound.js?v=0.20';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.20';
+import { fmt } from './realtime.js?v=0.20';
+import { icon, fillIcons } from './icons.js?v=0.20';
+import { makeThumbnails } from './thumbs.js?v=0.20';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -205,7 +205,7 @@ canvas.addEventListener('pointerup', (e) => {
 });
 canvas.addEventListener('pointerleave', () => setHover(null));
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY * 0.01); }, { passive: false });
-function zoom(d) { cam.dist = Math.max(4, Math.min(32, cam.dist + d)); }
+function zoom(d) { cam.dist = Math.max(4, Math.min(44, cam.dist + d)); }
 
 // 땅을 클릭했을 때 생기는 작은 표시
 // 도착할 때까지 은은하게 남아 있다가, 도착하면 천천히 사라짐
