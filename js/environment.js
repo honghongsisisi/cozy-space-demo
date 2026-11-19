@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.21';
-import { glowMat, fireMat } from './catalog.js?v=0.21';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.21';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.22';
+import { glowMat, fireMat } from './catalog.js?v=0.22';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.22';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -163,7 +163,7 @@ export class Environment {
 
   makeWeather() {
     // 비: 가는 선
-    const n = 1400;
+    const n = 700; // 빗줄기 수 (v0.22에서 1400 → 700, 차분하게)
     const rp = new Float32Array(n * 6);
     for (let i = 0; i < n; i++) {
       const x = (Math.random() - 0.5) * 50, y = Math.random() * 25, z = (Math.random() - 0.5) * 50;
