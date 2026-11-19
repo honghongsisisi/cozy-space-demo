@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.10';
-import { PALETTE as P } from './palette.js?v=0.10';
+import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.11';
+import { PALETTE as P } from './palette.js?v=0.11';
 
 export const PLOT_RADIUS = 10; // 둥근 섬의 반지름
 

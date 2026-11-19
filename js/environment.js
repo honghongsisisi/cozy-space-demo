@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.10';
-import { glowMat, fireMat } from './catalog.js?v=0.10';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.10';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.11';
+import { glowMat, fireMat } from './catalog.js?v=0.11';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.11';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -61,7 +61,9 @@ export class Environment {
 
     this.makeStars();
     this.makeMoon();
-    this.makeBubbles();
+    // 밤하늘 방울은 홍시 님 요청으로 뺐음 (다시 켜려면 아래 줄의 // 를 지우기)
+    // this.makeBubbles();
+    this.bubbles = [];
     this.makeClouds();
     this.makeWeather();
 
@@ -276,17 +278,6 @@ export class Environment {
     this.sky.position.copy(focus);
 
     const tt = performance.now() / 1000;
-    this.bubbleMat.opacity = clearNight * 0.9;
-    this.bubbles.forEach((bb) => {
-      const u = bb.userData;
-      bb.visible = clearNight > 0.01;
-      if (!bb.visible) return;
-      u.y += dt * u.sp;
-      if (u.y > 16) u.y = 0;
-      bb.position.set(Math.cos(u.a + tt * 0.03) * u.r, 1 + u.y, Math.sin(u.a + tt * 0.03) * u.r);
-      bb.material.opacity = this.bubbleMat.opacity;
-    });
-
     this.cloudMat.color.setHex(0xffffff).lerp(new THREE.Color(night > 0.5 ? 0x5a5f8a : 0xc8ced8), Math.max(cl, night * 0.8));
     this.cloudRoot.rotation.y += dt * 0.004;
 

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.10';
-import { Avatar } from './avatar.js?v=0.10';
-import { Environment } from './environment.js?v=0.10';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.10';
-import { saveState, loadState, clearState } from './storage.js?v=0.10';
-import { Sound } from './sound.js?v=0.10';
-import { fmt } from './realtime.js?v=0.10';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.11';
+import { Avatar } from './avatar.js?v=0.11';
+import { Environment } from './environment.js?v=0.11';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.11';
+import { saveState, loadState, clearState } from './storage.js?v=0.11';
+import { Sound } from './sound.js?v=0.11';
+import { fmt } from './realtime.js?v=0.11';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -503,7 +503,7 @@ function refreshSpaceInfo() {
 document.getElementById('ticker-text').innerHTML = [
   '🏝️ 나의 작은 섬 데모에 오신 걸 환영해요',
   '🎁 오른쪽 아이템 → 가구에서 섬을 꾸며 보세요',
-  '🌙 밤이 되면 등불이 켜지고 하늘에 방울이 떠올라요',
+  '🌙 밤이 되면 등불이 켜지고 별이 떠요',
   '📷 마음에 드는 장면은 사진으로 남겨 보세요',
   '👫 친구 섬 놀러 가기는 다음 단계에서 열려요',
 ].join('<i>·</i>');
