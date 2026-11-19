@@ -77,6 +77,7 @@ window.addEventListener('keydown', (e) => {
   keys.add(k);
   if (k === ' ') { e.preventDefault(); avatar.jump(); }
   if (k === '1') avatar.wave();
+  if (k === 'i') setSide(!sideOpen);
   if (k === 'r') rotateCurrent();
   if (k === 'm' && selectedId) startMove(selectedId);
   if ((k === 'delete' || k === 'backspace') && selectedId) removeSelected();
@@ -84,7 +85,7 @@ window.addEventListener('keydown', (e) => {
     if (!help.classList.contains('hidden')) help.classList.add('hidden');
     else if (placing) stopPlacing(true);
     else if (selectedId) select(null);
-    else if (decorating) setDecorating(false);
+    else if (sideOpen) setSide(false);
   }
   if (k.startsWith('arrow')) e.preventDefault();
 });
@@ -199,11 +200,11 @@ function handleClick(e) {
 }
 
 // ---------- 꾸미기 ----------
-const drawer = document.getElementById('drawer');
+const side = document.getElementById('side');
+const sideTabs = document.getElementById('side-tabs');
 const drawerHint = document.getElementById('drawer-hint');
 const btnCancel = document.getElementById('btn-cancel-place');
 const itemGrid = document.getElementById('item-grid');
-const btnDecorate = document.getElementById('btn-decorate');
 const tools = document.getElementById('item-tools');
 
 let decorating = false;
@@ -219,15 +220,25 @@ ITEMS.forEach((it) => {
   itemGrid.appendChild(b);
 });
 
+// 서랍이 열려 있고 '가구' 탭일 때만 꾸미기 상태
+let sideOpen = false, sideTab = 'furniture';
 function setDecorating(on) {
   decorating = on;
-  drawer.classList.toggle('hidden', !on);
-  btnDecorate.classList.toggle('on', on);
-  btnDecorate.textContent = on ? '✓ 꾸미기 끝' : '🪴 꾸미기';
   world.grid.visible = on;
   if (!on) { stopPlacing(true); select(null); }
 }
-btnDecorate.addEventListener('click', () => setDecorating(!decorating));
+function setSide(open, tab = sideTab) {
+  sideOpen = open; sideTab = tab;
+  side.classList.toggle('open', open);
+  sideTabs.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  side.querySelectorAll('.side-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
+  setDecorating(open && tab === 'furniture');
+}
+document.getElementById('side-handle').addEventListener('click', () => setSide(!sideOpen));
+document.getElementById('side-close').addEventListener('click', () => setSide(false));
+sideTabs.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (b) setSide(true, b.dataset.tab);
+});
 
 function makeGhost(type) {
   const g = buildItem(type);

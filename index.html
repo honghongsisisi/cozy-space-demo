@@ -22,7 +22,7 @@
   </div>
 
   <!-- 오른쪽 위: 시간과 날씨 -->
-  <div class="ui top-right panel" id="env-panel">
+  <div class="ui env-panel panel" id="env-panel">
     <div class="panel-row">
       <span class="panel-label">시간</span>
       <div class="seg" id="time-seg">
@@ -48,14 +48,46 @@
     </div>
   </div>
 
-  <!-- 꾸미기 서랍 -->
-  <div class="ui drawer hidden" id="drawer">
-    <div class="drawer-head">
-      <span id="drawer-hint">놓고 싶은 물건을 고르세요</span>
-      <button id="btn-cancel-place" class="small-btn hidden">그만 놓기 (Esc)</button>
+  <!-- 오른쪽 서랍 창: 평소엔 접혀 있고 손잡이를 누르면 펼쳐짐 -->
+  <aside class="ui side" id="side" aria-label="가구와 옷장">
+    <button class="side-handle" id="side-handle" title="서랍 열기 (I)">
+      <span class="handle-arrow">‹</span>
+      <span class="handle-label">가구<br>옷장</span>
+    </button>
+    <div class="side-body">
+      <div class="side-head">
+        <div class="side-tabs" id="side-tabs">
+          <button data-tab="furniture" class="on">🪑 가구</button>
+          <button data-tab="closet">👕 옷장</button>
+        </div>
+        <button class="side-close" id="side-close" title="접기 (Esc)">›</button>
+      </div>
+
+      <div class="side-pane" data-pane="furniture">
+        <div class="side-hint">
+          <span id="drawer-hint">놓고 싶은 물건을 고르세요</span>
+          <button id="btn-cancel-place" class="small-btn hidden">그만 놓기</button>
+        </div>
+        <div class="item-grid" id="item-grid"></div>
+        <p class="side-tip">놓인 물건을 클릭하면 돌리기 · 옮기기 · 치우기를 할 수 있어요</p>
+      </div>
+
+      <div class="side-pane hidden" data-pane="closet">
+        <div class="closet-preview">
+          <div class="closet-figure">🧍</div>
+          <span class="soon-badge">준비 중</span>
+        </div>
+        <div class="closet-cats">
+          <span>머리</span><span>상의</span><span>하의</span><span>신발</span><span>소품</span>
+        </div>
+        <div class="item-grid closet-grid">
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+        </div>
+        <p class="side-tip">옷 갈아입기는 다음 단계에서 만들 자리예요</p>
+      </div>
     </div>
-    <div class="item-grid" id="item-grid"></div>
-  </div>
+  </aside>
 
   <!-- 선택한 물건 도구 -->
   <div class="ui item-tools hidden" id="item-tools">
@@ -66,7 +98,6 @@
 
   <!-- 아래: 메인 버튼 -->
   <div class="ui bottom-bar">
-    <button id="btn-decorate" class="main-btn">🪴 꾸미기</button>
     <button id="btn-photo" class="main-btn">📷 사진</button>
     <button id="btn-wave" class="main-btn">👋 인사</button>
     <button id="btn-save" class="main-btn">💾 저장</button>
@@ -82,9 +113,9 @@
         <li><b>점프</b> <kbd>Space</kbd> · <b>인사</b> <kbd>1</kbd></li>
         <li><b>카메라 돌리기</b> 마우스를 누른 채 끌기 (또는 <kbd>Q</kbd><kbd>E</kbd>)</li>
         <li><b>가까이·멀리</b> 마우스 휠</li>
-        <li><b>꾸미기</b> 🪴 버튼 → 물건 고르기 → 땅 클릭. <kbd>R</kbd> 돌리기</li>
-        <li><b>물건 고치기</b> 꾸미기 중에 놓인 물건을 클릭 → 돌리기·옮기기·치우기</li>
-        <li><b>분위기</b> 오른쪽 위에서 시간과 날씨를 바꿔 보세요</li>
+        <li><b>꾸미기</b> 오른쪽 끝 손잡이(또는 <kbd>I</kbd>)로 서랍 열기 → 물건 고르기 → 땅 클릭. <kbd>R</kbd> 돌리기</li>
+        <li><b>물건 고치기</b> 서랍이 열린 동안 놓인 물건을 클릭 → 돌리기·옮기기·치우기</li>
+        <li><b>분위기</b> 왼쪽 위에서 시간과 날씨를 바꿔 보세요</li>
         <li><b>사진</b> 📷 버튼으로 지금 화면을 사진으로 남겨요</li>
       </ul>
       <p class="muted">꾸민 마당은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
