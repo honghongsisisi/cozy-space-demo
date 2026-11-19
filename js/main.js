@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.7';
-import { Avatar } from './avatar.js?v=0.7';
-import { Environment } from './environment.js?v=0.7';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.7';
-import { saveState, loadState, clearState } from './storage.js?v=0.7';
-import { Sound } from './sound.js?v=0.7';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.8';
+import { Avatar } from './avatar.js?v=0.8';
+import { Environment } from './environment.js?v=0.8';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.8';
+import { saveState, loadState, clearState } from './storage.js?v=0.8';
+import { Sound } from './sound.js?v=0.8';
+import { fmt } from './realtime.js?v=0.8';
 
 // ---------- 기본 장면 ----------
 const canvas = document.getElementById('scene');
@@ -419,15 +420,21 @@ function updateTools() {
 const timeSeg = document.getElementById('time-seg');
 const weatherSeg = document.getElementById('weather-seg');
 const timeFlow = document.getElementById('time-flow');
+const realInfo = document.getElementById('real-info');
 function refreshEnvButtons() {
-  timeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', !env.flowing && Math.abs(env.time - parseFloat(b.dataset.time)) < 0.01));
+  timeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on',
+    b.dataset.time === 'real' ? env.realTime : (!env.realTime && !env.flowing && Math.abs(env.time - parseFloat(b.dataset.time)) < 0.01)));
+  realInfo.classList.toggle('hidden', !env.realTime);
+  timeFlow.parentElement.classList.toggle('hidden', env.realTime);
+  if (env.realTime && env.sun_) realInfo.textContent = `서울 ${fmt(env.seoul)} · 해 뜸 ${fmt(env.sun_.sunrise)} · 해 짐 ${fmt(env.sun_.sunset)}`;
   weatherSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', env.weather === b.dataset.weather));
   timeFlow.checked = env.flowing;
 }
 timeSeg.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   env.flowing = false;
-  env.setTime(parseFloat(b.dataset.time));
+  if (b.dataset.time === 'real') { env.realTime = true; env.update(0, avatar.position); }
+  else { env.realTime = false; env.setTime(parseFloat(b.dataset.time)); }
   refreshEnvButtons(); scheduleSave();
 });
 weatherSeg.addEventListener('click', (e) => {
@@ -435,7 +442,7 @@ weatherSeg.addEventListener('click', (e) => {
   env.setWeather(b.dataset.weather);
   refreshEnvButtons(); scheduleSave();
 });
-timeFlow.addEventListener('change', () => { env.flowing = timeFlow.checked; refreshEnvButtons(); scheduleSave(); });
+timeFlow.addEventListener('change', () => { env.flowing = timeFlow.checked; if (env.flowing) env.realTime = false; refreshEnvButtons(); scheduleSave(); });
 refreshEnvButtons();
 
 // ---------- 기타 버튼 ----------
@@ -585,6 +592,7 @@ function takePhoto() {
 
 // ---------- 매 프레임 ----------
 const clock = new THREE.Clock();
+let realTick = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (keys.has('q')) cam.yaw += dt * 1.8;
@@ -594,7 +602,7 @@ function frame() {
   world.update(dt);
   updateCamera(dt);
   env.update(dt, avatar.position);
-  if (env.flowing) refreshEnvButtons();
+  if (env.flowing || (env.realTime && (realTick += dt) > 1)) { realTick = 0; refreshEnvButtons(); } // 실제 시간 표시는 1초에 한 번
   if (markerT > 0) {
     markerT -= dt * 1.5;
     marker.material.opacity = Math.max(0, markerT);

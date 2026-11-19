@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>나의 작은 섬 (데모)</title>
   <meta name="description" content="작은 섬을 꾸미고 산책하는 3D 웹 데모">
-  <link rel="stylesheet" href="style.css?v=0.7">
+  <link rel="stylesheet" href="style.css?v=0.8">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -52,7 +52,9 @@
           <button data-time="13">낮</button>
           <button data-time="18.3">노을</button>
           <button data-time="22">밤</button>
+          <button data-time="real" title="한국(서울) 실제 시간과 계절에 맞춰 하늘이 바뀌어요">🕐 실제 시간</button>
         </div>
+        <span class="real-info hidden" id="real-info"></span>
         <div class="seg" id="weather-seg">
           <button data-weather="clear">맑음</button>
           <button data-weather="cloudy">흐림</button>
@@ -173,7 +175,7 @@
     <span class="ticker-label">📢 소식</span>
     <div class="ticker-track"><div class="ticker-text" id="ticker-text"></div></div>
     <span class="ticker-event">진행 중인 이벤트가 없어요</span>
-    <span class="version" title="지금 보고 있는 버전">v0.7</span>
+    <span class="version" title="지금 보고 있는 버전">v0.8</span>
   </footer>
 </div>
 
@@ -189,7 +191,7 @@
       <li><b>가까이·멀리</b> 마우스 휠</li>
       <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
       <li><b>물건 고치기</b> 가구 창이 열린 동안 놓인 물건을 클릭</li>
-      <li><b>분위기</b> 3D 화면 위 오른쪽에서 시간과 날씨를 바꿔요</li>
+      <li><b>분위기</b> 3D 화면 위 오른쪽에서 시간과 날씨를 바꿔요. 🕐 실제 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
       <li><b>사진</b> 3D 화면 위 왼쪽 📷 버튼</li>
     </ul>
     <p class="muted">꾸민 섬은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
@@ -210,6 +212,6 @@
 <div id="flash"></div>
 <div id="toast"></div>
 
-<script type="module" src="js/main.js?v=0.7"></script>
+<script type="module" src="js/main.js?v=0.8"></script>
 </body>
 </html>

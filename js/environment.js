@@ -1,7 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.7';
-import { glowMat, fireMat } from './catalog.js?v=0.7';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.8';
+import { glowMat, fireMat } from './catalog.js?v=0.8';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.8';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -21,6 +22,7 @@ export class Environment {
     this.time = 13;
     this.weather = 'clear';
     this.flowing = false;
+    this.realTime = false; // 켜면 한국 실제 시간에 맞춰 하늘이 바뀜
     this.cloudiness = 0; // 0~1, 날씨에 따라 천천히 바뀜
 
     // 하늘 공 (위·아래 두 색 그라데이션)
@@ -220,7 +222,12 @@ export class Environment {
   }
 
   update(dt, focus) {
-    if (this.flowing) this.setTime(this.time + dt * (24 / 180)); // 3분에 하루
+    if (this.realTime) {
+      const now = seoulNow();
+      if (!this.sun_ || this.sun_.day !== now.day) this.sun_ = { day: now.day, ...sunTimes(now.year, now.month, now.day) }; // 하루에 한 번만 계산
+      this.seoul = now.hours;
+      this.setTime(skyTimeFor(now.hours, this.sun_));
+    } else if (this.flowing) this.setTime(this.time + dt * (24 / 180)); // 3분에 하루
 
     const wantCloud = { clear: 0, cloudy: 0.75, rain: 1, snow: 0.6, petals: 0.1 }[this.weather];
     this.cloudiness += (wantCloud - this.cloudiness) * Math.min(1, dt * 1.5);
@@ -325,11 +332,12 @@ export class Environment {
     }
   }
 
-  serialize() { return { time: this.time, weather: this.weather, flowing: this.flowing }; }
+  serialize() { return { time: this.time, weather: this.weather, flowing: this.flowing, realTime: this.realTime }; }
   restore(s) {
     if (!s) return;
     if (typeof s.time === 'number') this.setTime(s.time);
     if (s.weather) this.setWeather(s.weather);
     this.flowing = !!s.flowing;
+    this.realTime = !!s.realTime;
   }
 }
