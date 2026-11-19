@@ -45,6 +45,7 @@ export class Environment {
     this.sun.shadow.mapSize.set(1024, 1024);
     const sc = this.sun.shadow.camera;
     sc.left = sc.bottom = -14; sc.right = sc.top = 14; sc.near = 1; sc.far = 80;
+    this.sun.shadow.radius = 4; // 그림자 가장자리를 부드럽게
     this.sun.shadow.bias = -0.0008;
     this.sun.shadow.normalBias = 0.03;
     scene.add(this.sun, this.sun.target);
@@ -236,8 +237,8 @@ export class Environment {
 
     // 물은 하늘색을 비춤
     this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
-    this.world.ripples.material.opacity = 0.25 + (1 - night) * 0.3;
-    this.world.ripples2.material.opacity = 0.15 + (1 - night) * 0.15;
+    this.world.ripples.material.opacity = 0.14 + (1 - night) * 0.16;
+    this.world.ripples2.material.opacity = 0.08 + (1 - night) * 0.08;
 
     const sunI = (a.sunI + (b.sunI - a.sunI) * k) * (1 - cl * 0.55);
     const ambI = (a.ambI + (b.ambI - a.ambI) * k) * (1 - cl * 0.2);

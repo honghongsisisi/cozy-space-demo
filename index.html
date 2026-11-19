@@ -35,12 +35,9 @@
   </header>
 
   <div class="main">
-    <!-- 3D 화면 -->
-    <section class="viewport" id="viewport">
-      <canvas id="scene"></canvas>
-      <div id="loading">섬을 준비하고 있어요…</div>
-
-      <!-- ② 왼쪽 위 도구줄 -->
+    <div class="stage">
+      <!-- ② 3D 화면 바로 위 도구줄 (화면 바깥) -->
+      <div class="stage-bar">
       <div class="toolbar">
         <button id="btn-photo" class="tool-btn" title="사진 찍기">📷 <span>사진</span></button>
         <button class="tool-btn soon" data-soon="동영상 찍기" title="동영상 (준비 중)">🎬 <span>동영상</span></button>
@@ -49,14 +46,6 @@
         <button id="btn-full" class="tool-btn" title="전체화면">⛶ <span>전체화면</span></button>
       </div>
 
-      <!-- 왼쪽 세로 바로가기 -->
-      <div class="quick">
-        <button id="btn-wave" class="quick-btn" title="인사 (1)"><span>👋</span>인사</button>
-        <button id="btn-jump" class="quick-btn" title="점프 (Space)"><span>⤴️</span>점프</button>
-        <button id="btn-help" class="quick-btn" title="조작법"><span>❔</span>도움말</button>
-      </div>
-
-      <!-- 오른쪽 위: 시간·날씨 -->
       <div class="env-panel" id="env-panel">
         <div class="seg" id="time-seg">
           <button data-time="7">아침</button>
@@ -74,6 +63,19 @@
         <label class="toggle"><input type="checkbox" id="time-flow"> 시간이 흐르게</label>
       </div>
 
+      </div>
+    <!-- 3D 화면 -->
+    <section class="viewport" id="viewport">
+      <canvas id="scene"></canvas>
+      <div id="loading">섬을 준비하고 있어요…</div>
+
+      <!-- 왼쪽 세로 바로가기 -->
+      <div class="quick">
+        <button id="btn-wave" class="quick-btn" title="인사 (1)"><span>👋</span>인사</button>
+        <button id="btn-jump" class="quick-btn" title="점프 (Space)"><span>⤴️</span>점프</button>
+        <button id="btn-help" class="quick-btn" title="조작법"><span>❔</span>도움말</button>
+      </div>
+
       <!-- 선택한 물건 도구 -->
       <div class="item-tools hidden" id="item-tools">
         <button data-tool="rotate" title="돌리기 (R)">⟳ 돌리기</button>
@@ -88,6 +90,7 @@
         <button class="chat-send" disabled>보내기</button>
       </div>
     </section>
+    </div>
 
     <!-- ③ 넓게 펼쳐지는 창 -->
     <section class="panel hidden" id="panel">
@@ -184,8 +187,8 @@
       <li><b>가까이·멀리</b> 마우스 휠</li>
       <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
       <li><b>물건 고치기</b> 가구 창이 열린 동안 놓인 물건을 클릭</li>
-      <li><b>분위기</b> 화면 오른쪽 위에서 시간과 날씨를 바꿔요</li>
-      <li><b>사진</b> 왼쪽 위 📷 버튼</li>
+      <li><b>분위기</b> 3D 화면 위 오른쪽에서 시간과 날씨를 바꿔요</li>
+      <li><b>사진</b> 3D 화면 위 왼쪽 📷 버튼</li>
     </ul>
     <p class="muted">꾸민 섬은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
     <button id="btn-help-close" class="main-btn">시작하기</button>

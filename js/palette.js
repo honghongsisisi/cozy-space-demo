@@ -32,9 +32,9 @@ export const PALETTE = {
 export const SKY_KEYS = [
   { t: 0,    top: 0x1c2170, bottom: 0x9a6fd0, sun: 0xb7b0ff, sunI: 0.5,  ambI: 0.75 },
   { t: 5,    top: 0x2a3a8a, bottom: 0xc79ad8, sun: 0xc8b8ff, sunI: 0.55, ambI: 0.8 },
-  { t: 7,    top: 0x86b8ec, bottom: 0xffdccc, sun: 0xffe0bd, sunI: 1.8,  ambI: 1.15 },
-  { t: 10,   top: 0x5aa8ee, bottom: 0xcfeafc, sun: 0xfff7ea, sunI: 2.4,  ambI: 1.35 },
-  { t: 15,   top: 0x5aa8ee, bottom: 0xcfeafc, sun: 0xfff7ea, sunI: 2.4,  ambI: 1.35 },
+  { t: 7,    top: 0x8fbbe6, bottom: 0xfbdccf, sun: 0xffe2c4, sunI: 1.6,  ambI: 1.35 },
+  { t: 10,   top: 0x7db6e4, bottom: 0xd8ecf8, sun: 0xfff4e4, sunI: 2.0,  ambI: 1.6  },
+  { t: 15,   top: 0x7db6e4, bottom: 0xd8ecf8, sun: 0xfff4e4, sunI: 2.0,  ambI: 1.6  },
   { t: 18.3, top: 0x7484d8, bottom: 0xffb898, sun: 0xffb07e, sunI: 1.6,  ambI: 1.0 },
   { t: 20,   top: 0x2d3285, bottom: 0xb27ad0, sun: 0xb7b0ff, sunI: 0.55, ambI: 0.8 },
   { t: 22,   top: 0x1c2170, bottom: 0x9a6fd0, sun: 0xb7b0ff, sunI: 0.5,  ambI: 0.75 },

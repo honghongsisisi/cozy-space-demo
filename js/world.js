@@ -49,7 +49,7 @@ export class World {
     // 잔잔한 물 (하늘색을 비추도록 환경에서 색을 바꿉니다)
     this.water = new THREE.Mesh(
       new THREE.CircleGeometry(400, 48),
-      new THREE.MeshPhongMaterial({ color: 0x8ec5f0, shininess: 80, specular: 0x666666 })
+      new THREE.MeshPhongMaterial({ color: 0x8ec5f0, shininess: 25, specular: 0x1e1e1e })
     );
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.y = -0.9;
@@ -72,7 +72,7 @@ export class World {
     tex.repeat.set(40, 40);
     this.ripples = new THREE.Mesh(
       new THREE.CircleGeometry(400, 48),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false })
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.35, depthWrite: false })
     );
     this.ripples.rotation.x = -Math.PI / 2;
     this.ripples.position.y = -0.88;
@@ -120,7 +120,7 @@ export class World {
     const s = Math.ceil(R) * 2;
     this.grid = new THREE.GridHelper(s, s, 0xffffff, 0xffffff);
     this.grid.material.transparent = true;
-    this.grid.material.opacity = 0.22;
+    this.grid.material.opacity = 0.16;
     this.grid.position.y = 0.01;
     this.grid.visible = false;
     this.scene.add(this.grid);
