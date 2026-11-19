@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.13';
-import { Avatar } from './avatar.js?v=0.13';
-import { Environment } from './environment.js?v=0.13';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.13';
-import { saveState, loadState } from './storage.js?v=0.13';
-import { Sound } from './sound.js?v=0.13';
-import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.13';
-import { fmt } from './realtime.js?v=0.13';
-import { icon, fillIcons } from './icons.js?v=0.13';
-import { makeThumbnails } from './thumbs.js?v=0.13';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.14';
+import { Avatar } from './avatar.js?v=0.14';
+import { Environment } from './environment.js?v=0.14';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.14';
+import { saveState, loadState } from './storage.js?v=0.14';
+import { Sound } from './sound.js?v=0.14';
+import { Chat, BUBBLE_COLORS, TEXT_COLORS, FONTS } from './chat.js?v=0.14';
+import { fmt } from './realtime.js?v=0.14';
+import { icon, fillIcons } from './icons.js?v=0.14';
+import { makeThumbnails } from './thumbs.js?v=0.14';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -49,7 +49,15 @@ function updateCamera(dt) {
     cam.target.z + Math.cos(cam.yaw) * cp * cam.dist
   );
   camera.lookAt(cam.target);
+  // 아이템 창이 3D 화면 오른쪽을 가리는 동안, 보이는 왼쪽 부분 가운데에 캐릭터가 오도록 화면만 살짝 옆으로 밀기
+  // (카메라를 움직이는 게 아니라 '그림을 그리는 자리'만 옮겨서 어지럽지 않음)
+  const want2 = panelOpen && window.innerWidth > 900 ? panel.offsetWidth / 2 : 0;
+  viewShift += (want2 - viewShift) * Math.min(1, dt * 5);
+  const w = Math.max(1, viewport.clientWidth), h = Math.max(1, viewport.clientHeight);
+  if (Math.abs(viewShift) > 0.5) camera.setViewOffset(w, h, viewShift, 0, w, h);
+  else if (camera.view && camera.view.enabled) camera.clearViewOffset();
 }
+let viewShift = 0;
 
 // ---------- 저장 ----------
 let saveTimer = null;
@@ -349,7 +357,7 @@ let panelOpen = false, currentPane = null;
 function openPanel(pane) {
   if (pane === 'furniture' && role === 'guest') { toast('꾸미기는 섬 주인만 할 수 있어요'); return; }
   panelOpen = !!pane; currentPane = pane;
-  panel.classList.toggle('closed', !pane); // 닫을 때도 내용은 그대로 두고 폭만 천천히 줄임
+  panel.classList.toggle('closed', !pane); // 3D 화면은 그대로, 창만 살며시 나타나고 사라짐
   if (pane) {
     panelTitle.textContent = PANES[pane];
     panel.querySelectorAll('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
