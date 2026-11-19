@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.16">
+  <link rel="stylesheet" href="style.css?v=0.17">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -43,7 +43,7 @@
         <button data-time="13">낮</button>
         <button data-time="18.3">노을</button>
         <button data-time="22">밤</button>
-        <button data-time="real" id="btn-real" title="한국(서울) 실제 시간과 계절에 맞춰 하늘이 바뀌어요"><i data-icon="clock"></i>실제 시간<b class="real-clock" id="real-info"></b></button>
+        <button data-time="real" id="btn-real" title="한국(서울) 현재 시간과 계절에 맞춰 하늘이 바뀌어요"><i data-icon="clock"></i>현재 시간</button>
       </div>
       <div class="seg" id="weather-seg">
         <button data-weather="clear">맑음</button>
@@ -207,7 +207,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.16</span>
+      <span class="version" title="지금 보고 있는 버전">v0.17</span>
     </nav>
   </div>
 
@@ -226,7 +226,7 @@
       <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
       <li><b>물건 고치기</b> 가구 창이 열린 동안 놓인 물건을 클릭</li>
       <li><b>되돌리기</b> <kbd>Ctrl</kbd>+<kbd>Z</kbd> · 다시 하기 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></li>
-      <li><b>분위기</b> 위쪽에서 시간과 날씨를 바꿔요. 실제 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
+      <li><b>분위기</b> 위쪽에서 시간과 날씨를 바꿔요. 현재 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
       <li><b>채팅</b> <kbd>Enter</kbd>로 입력줄을 열고 말을 쓰면 머리 위에 말풍선이 떠요</li>
       <li><b>사진</b> 위쪽 사진 버튼</li>
     </ul>
@@ -247,6 +247,6 @@
 </div>
 <div id="flash"></div>
 
-<script type="module" src="js/main.js?v=0.16"></script>
+<script type="module" src="js/main.js?v=0.17"></script>
 </body>
 </html>

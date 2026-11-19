@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.16';
-import { Avatar } from './avatar.js?v=0.16';
-import { Environment } from './environment.js?v=0.16';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.16';
-import { saveState, loadState } from './storage.js?v=0.16';
-import { Sound } from './sound.js?v=0.16';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.16';
-import { fmt } from './realtime.js?v=0.16';
-import { icon, fillIcons } from './icons.js?v=0.16';
-import { makeThumbnails } from './thumbs.js?v=0.16';
+import { World, DEFAULT_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.17';
+import { Avatar } from './avatar.js?v=0.17';
+import { Environment } from './environment.js?v=0.17';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.17';
+import { saveState, loadState } from './storage.js?v=0.17';
+import { Sound } from './sound.js?v=0.17';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.17';
+import { fmt } from './realtime.js?v=0.17';
+import { icon, fillIcons } from './icons.js?v=0.17';
+import { makeThumbnails } from './thumbs.js?v=0.17';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -522,20 +522,14 @@ function updateTools() {
 const timeSeg = document.getElementById('time-seg');
 const weatherSeg = document.getElementById('weather-seg');
 const timeFlow = document.getElementById('time-flow');
-const realInfo = document.getElementById('real-info');
-const btnReal = document.getElementById('btn-real');
 const timeFlowLabel = document.getElementById('time-flow-label');
 function refreshEnvButtons() {
   timeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on',
     b.dataset.time === 'real' ? env.realTime : (!env.realTime && !env.flowing && Math.abs(env.time - parseFloat(b.dataset.time)) < 0.01)));
-  // 실제 시간일 때: 버튼 안에 지금 시각, 마우스를 올리면 해 뜸·해 짐. '시간이 흐르게'는 자리는 그대로 두고 흐리게만
-  if (env.realTime && env.sun_) {
-    realInfo.textContent = fmt(env.seoul);
-    btnReal.title = `서울 ${fmt(env.seoul)} · 해 뜸 ${fmt(env.sun_.sunrise)} · 해 짐 ${fmt(env.sun_.sunset)}`;
-  }
+  // 현재 시간일 때: 버튼에는 '골랐다' 표시만. '시간이 흐르게'는 자리는 그대로 두고 흐리게만
   timeFlowLabel.classList.toggle('dim', env.realTime);
   timeFlow.disabled = env.realTime || role === 'guest';
-  timeFlowLabel.title = env.realTime ? '실제 시간을 쓰는 동안에는 저절로 흘러요' : '';
+  timeFlowLabel.title = env.realTime ? '현재 시간을 쓰는 동안에는 저절로 흘러요' : '';
   weatherSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', env.weather === b.dataset.weather));
   timeFlow.checked = env.flowing;
 }
@@ -612,7 +606,7 @@ function refreshSpaceInfo() {
   const counts = {};
   world.items.forEach(({ data }) => { const g = ITEM_BY_TYPE[data.type].group; counts[g] = (counts[g] || 0) + 1; });
   document.getElementById('space-groups').innerHTML = ITEM_GROUPS.map((g) => `<span>${g.name}<b>${counts[g.id] || 0}</b></span>`).join('');
-  document.getElementById('space-time').textContent = env.realTime ? '실제 시간 (한국)' : env.flowing ? '흐르는 시간' : (TIME_NAMES[Math.round(env.time * 10) / 10] || `${fmt(env.time)}`);
+  document.getElementById('space-time').textContent = env.realTime ? '현재 시간 (한국)' : env.flowing ? '흐르는 시간' : (TIME_NAMES[Math.round(env.time * 10) / 10] || `${fmt(env.time)}`);
   document.getElementById('space-weather').textContent = WEATHER_NAMES[env.weather] || env.weather;
 }
 world.onChange(() => { if (currentPane === 'space') refreshSpaceInfo(); });
@@ -784,7 +778,7 @@ function frame() {
   world.update(dt);
   updateCamera(dt);
   env.update(dt, avatar.position);
-  if (env.flowing || (env.realTime && (realTick += dt) > 1)) { realTick = 0; refreshEnvButtons(); } // 실제 시간 표시는 1초에 한 번
+  if (env.flowing) refreshEnvButtons();
   if (marker.visible) {
     if (avatar.target) {
       // 가는 동안: 은은하게 숨 쉬듯
