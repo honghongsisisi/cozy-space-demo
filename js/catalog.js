@@ -1,6 +1,6 @@
 // 아이템 목록. 새 물건을 넣으려면 ITEMS에 한 줄 추가하고 build 함수를 만들면 됩니다.
 import * as THREE from 'three';
-import { PALETTE as P } from './palette.js?v=0.33';
+import { PALETTE as P } from './palette.js?v=0.34';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
