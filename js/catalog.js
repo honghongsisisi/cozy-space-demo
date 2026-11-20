@@ -1,6 +1,6 @@
 // 아이템 목록. 새 물건을 넣으려면 ITEMS에 한 줄 추가하고 build 함수를 만들면 됩니다.
 import * as THREE from 'three';
-import { PALETTE as P } from './palette.js?v=0.26';
+import { PALETTE as P } from './palette.js?v=0.27';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -171,6 +171,52 @@ const builders = {
     g.userData.light = new THREE.Vector3(0, 0.6, 0);
     return g;
   },
+  // ---- 광장 전용 (가구 창에는 나오지 않음) ----
+  fountain() {
+    const g = new THREE.Group();
+    // 낮은 팔각 돌 수반 + 안쪽 물 + 가운데 기둥 + 위쪽 작은 그릇. 물은 반짝이지 않는 차분한 하늘색
+    g.add(mesh(new THREE.CylinderGeometry(2.0, 2.1, 0.5, 8), mat(P.stone), 0, 0.25, 0));
+    g.add(mesh(new THREE.CylinderGeometry(2.08, 2.08, 0.08, 8), mat(P.stoneDark), 0, 0.52, 0));
+    const water = mesh(new THREE.CylinderGeometry(1.78, 1.78, 0.04, 24), mat(P.fountainWater, { flatShading: false }), 0, 0.46, 0);
+    water.castShadow = false;
+    g.add(water);
+    g.add(mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.25, 8), mat(P.stone), 0, 0.95, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.85, 0.35, 0.28, 8), mat(P.stone), 0, 1.62, 0));
+    const water2 = mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.03, 20), mat(P.fountainWater, { flatShading: false }), 0, 1.74, 0);
+    water2.castShadow = false;
+    g.add(water2);
+    g.add(mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.45, 6), mat(P.stoneDark), 0, 1.95, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(P.stone), 0, 2.22, 0));
+    // 물이 퐁퐁 솟는 작은 물방울 (천천히 오르내림)
+    const drop = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), mat(P.fountainWater, { flatShading: false }));
+    drop.position.y = 2.42;
+    drop.userData.bob = true;
+    g.add(drop);
+    return g;
+  },
+  bigTree() {
+    // 광장의 큰 나무: 동글나무를 두 배쯤 크게, 잎은 세 덩이
+    const g = new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(0.3, 0.45, 2.4, 7), mat(P.wood), 0, 1.2, 0));
+    g.add(mesh(new THREE.IcosahedronGeometry(1.9, 0), mat(P.leaf[0]), 0, 3.5, 0));
+    g.add(mesh(new THREE.IcosahedronGeometry(1.25, 0), mat(P.leaf[1]), 1.1, 2.9, 0.5));
+    g.add(mesh(new THREE.IcosahedronGeometry(1.1, 0), mat(P.leaf[2]), -0.9, 4.3, -0.4));
+    return g;
+  },
+  plazaFloor() {
+    // 광장 바닥: 따뜻한 돌 바닥 원 + 바깥 테두리 (그림자만 받고 부딪히지 않음)
+    const g = new THREE.Group();
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(7.6, 7.6, 0.04, 48), mat(P.paving, { flatShading: false }));
+    floor.position.y = 0.02; floor.receiveShadow = true; g.add(floor);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(7.6, 8.0, 48), mat(P.stoneDark, { flatShading: false, side: THREE.DoubleSide }));
+    rim.rotation.x = -Math.PI / 2; rim.position.y = 0.045; rim.receiveShadow = true; g.add(rim);
+    // 바닥 무늬: 가운데에서 퍼지는 은은한 동심원 두 줄
+    [3.2, 5.4].forEach((r) => {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.12, 48), mat(P.pavingLine, { flatShading: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.043; ring.receiveShadow = true; g.add(ring);
+    });
+    return g;
+  },
   stepStone() {
     const g = new THREE.Group();
     g.add(mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.06, 7), mat(P.stone), 0, 0.03, 0));
@@ -194,6 +240,10 @@ export const ITEMS = [
   { type: 'parasol',   name: '파라솔',   emoji: '⛱️', radius: 0.15 , group: 'furniture' },
   { type: 'campfire',  name: '모닥불',   emoji: '🔥', radius: 0.5 , group: 'light' },
   { type: 'stepStone', name: '디딤돌',   emoji: '⬜', radius: 0 , group: 'path' },
+  // 광장 전용 (group이 ITEM_GROUPS에 없어서 가구 창에는 안 보임)
+  { type: 'fountain',  name: '분수대',   emoji: '⛲', radius: 2.2 , group: 'plaza' },
+  { type: 'bigTree',   name: '큰 나무',  emoji: '🌳', radius: 0.7 , group: 'plaza' },
+  { type: 'plazaFloor', name: '광장 바닥', emoji: '⭕', radius: 0 , group: 'plaza' },
 ];
 
 export const ITEM_GROUPS = [

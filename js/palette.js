@@ -17,6 +17,10 @@ export const PALETTE = {
   table: 0xe8d3b5,
   fire: 0xffa94d,
   cloud: 0xffffff,
+  // 광장
+  paving: 0xe2d6c4,      // 따뜻한 돌 바닥
+  pavingLine: 0xd2c4ae,  // 바닥 무늬
+  fountainWater: 0xa9cfe0, // 분수 물 (차분한 하늘색, 광택 없음)
   // 아바타
   skin: 0xffe4d6,
   hair: 0x7b543f,
