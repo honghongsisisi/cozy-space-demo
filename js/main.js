@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.37';
-import { Avatar } from './avatar.js?v=0.37';
-import { Environment } from './environment.js?v=0.37';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.37';
-import { saveState, loadState } from './storage.js?v=0.37';
-import { Sound } from './sound.js?v=0.37';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.37';
-import { fmt } from './realtime.js?v=0.37';
-import { icon, fillIcons } from './icons.js?v=0.37';
-import { makeThumbnails } from './thumbs.js?v=0.37';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.37';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.38';
+import { Avatar } from './avatar.js?v=0.38';
+import { Environment } from './environment.js?v=0.38';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.38';
+import { saveState, loadState } from './storage.js?v=0.38';
+import { Sound } from './sound.js?v=0.38';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.38';
+import { fmt } from './realtime.js?v=0.38';
+import { icon, fillIcons } from './icons.js?v=0.38';
+import { makeThumbnails } from './thumbs.js?v=0.38';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.38';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 

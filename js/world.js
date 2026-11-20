@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.37';
-import { PALETTE as P } from './palette.js?v=0.37';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.38';
+import { PALETTE as P } from './palette.js?v=0.38';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
@@ -435,26 +435,29 @@ export class World {
   // 카메라 쪽 벽은 낮게: 벽의 바깥 방향과 카메라 방향이 같으면 깎음 (천천히)
   updateWalls(dt, camPos) {
     if (!this.indoor) return;
-    // 원작 방식: 벽은 '안쪽 면'만 있는 것처럼. 카메라가 벽 바깥쪽에 있으면 그 벽은 통째로 안 보이고(바닥만 남김),
+    // 원작 방식: 벽은 '안쪽 면'만 있는 것처럼. 카메라가 벽 바깥쪽에 있으면 그 벽은 아주 낮은 테두리만 남기고,
     // 안쪽에 있으면 보여요. 벽이 카메라와 나란해지는(옆으로 보이는) 순간에만 바뀌어서 출렁이는 움직임이 없어요
+    const LOW = 0.05; // 카메라 쪽 벽은 발목보다 낮은 테두리만 (약 15cm)
     this.walls.forEach((w) => {
       const n = w.userData.normal; // 바깥 방향
       const side = (camPos.x - w.position.x) * n.x + (camPos.z - w.position.z) * n.z; // > 0 이면 카메라가 벽 바깥쪽
-      const cur = side > 0 ? 0 : 1; // 카메라 쪽 벽은 아예 안 보임 (단차 없이 바닥만)
+      const cur = side > 0 ? LOW : 1;
       w.userData.cut = cur;
-      w.visible = cur > 0;
+      w.userData.body.scale.y = cur;
+      w.userData.windows.forEach((g) => { g.visible = cur > 0.7; });
     });
-    this.roomDoor.visible = this.walls[3].visible;
+    this.roomDoor.visible = this.walls[3].userData.cut > 0.7; // 낮아진 쪽 문틀은 숨겨서 문 자리는 평평하게
     // 지붕: 들어오면 사라지고, 나갈 때 다시 덮임
     const wantRoof = this.closing ? 1 : 0;
     this.roofOpacity += Math.sign(wantRoof - this.roofOpacity) * Math.min(Math.abs(wantRoof - this.roofOpacity), dt * 5); // 0.2초쯤
     this.roofMat.opacity = this.roofOpacity;
     this.roof.visible = this.roofOpacity > 0.01;
     this.roofMat.depthWrite = this.roofOpacity > 0.98;
-    // 모서리 기둥: 붙은 두 벽이 모두 보일 때만
+    // 모서리 기둥: 붙은 두 벽 중 하나라도 낮아지면 같이 낮춤
     this.corners.forEach((p) => {
       const [sx, sz] = p.userData.corner;
-      p.visible = this.walls[sx < 0 ? 1 : 2].visible && this.walls[sz < 0 ? 0 : 3].visible;
+      p.scale.y = Math.min(this.walls[sx < 0 ? 1 : 2].userData.cut, this.walls[sz < 0 ? 0 : 3].userData.cut);
+      p.position.y = ((ROOM_H + 0.1) / 2) * p.scale.y;
     });
   }
 
