@@ -1,6 +1,6 @@
-// 채팅: 지금은 '혼자 써보기'. 메시지는 send → transport → receive 순서로 흐릅니다.
-// 2단계(친구와 함께)에서는 transport만 서버로 바꾸면, 남이 보낸 메시지도 같은 receive로 들어와
-// 그 사람 캐릭터 머리 위에 말풍선이 뜨게 됩니다.
+// 채팅: 메시지는 send → transport → receive 순서로 흐릅니다.
+// 친구와 함께 있을 때는 party.js가 send를 가로채 친구에게도 보내고,
+// 친구가 보낸 메시지는 같은 receive로 들어와 그 친구 머리 위에 말풍선이 떠요.
 import * as THREE from 'three';
 
 const PREF_KEY = 'cozy-space-demo:chat';
@@ -104,6 +104,12 @@ export class Chat {
     b.el.style.setProperty('--bubble', m.style.bubble);
     b.until = performance.now() + 4000 + m.text.length * 120; // 긴 말은 조금 더 오래
     b.el.classList.remove('gone');
+  }
+
+  // 친구가 나가면 그 친구 말풍선도 치우기
+  dropSpeaker(id) {
+    const b = this.bubbles.get(id);
+    if (b) { b.el.remove(); this.bubbles.delete(id); }
   }
 
   // 매 프레임: 말풍선을 말한 사람 머리 위에 따라 붙이기
