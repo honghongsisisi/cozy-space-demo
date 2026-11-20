@@ -2,7 +2,7 @@
 // 원리: 같은 섬에 들어온 사람들은 모두 같은 '방송 채널'에 귀를 기울이고 있어요.
 // 누가 움직이거나 말하면 짧은 쪽지를 채널에 띄우고, 다른 사람들 화면이 그 쪽지를 받아 그대로 보여 줘요.
 // 서버(Supabase)는 쪽지를 전달만 하고, 섬 꾸밈은 섬 주인 화면이 손님에게 직접 보내 줍니다.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.26';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.27';
 
 // 주소 끝에 ?localtest=1 을 붙이면 서버 없이 같은 브라우저의 두 창끼리만 연결 (개발 시험용)
 const LOCAL_TEST = new URLSearchParams(location.search).has('localtest');

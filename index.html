@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.26">
+  <link rel="stylesheet" href="style.css?v=0.27">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -56,11 +56,7 @@
 
     <div class="room-nav">
       <button class="btn soon" data-soon="추천하기"><i data-icon="heart"></i>추천 0</button>
-      <select class="nav-select soon-select" title="섬 이동 (준비 중)">
-        <option>내 섬</option>
-        <option disabled>친구 섬 (준비 중)</option>
-      </select>
-      <button class="btn soon" data-soon="섬 이동">가기</button>
+      <button id="btn-go" class="btn btn-go" title="누구나 모이는 광장으로 가요"><i data-icon="plaza"></i><span>광장 가기</span></button>
       <button class="btn soon" data-soon="아무 섬 구경하기"><i data-icon="dice"></i>아무 섬</button>
     </div>
   </header>
@@ -71,12 +67,6 @@
     <section class="viewport" id="viewport">
       <canvas id="scene"></canvas>
       <div id="loading">섬을 준비하고 있어요…</div>
-
-      <!-- 왼쪽 세로 바로가기 -->
-      <div class="quick">
-        <button id="btn-wave" class="quick-btn" title="인사 (1)"><i data-icon="hand"></i>인사</button>
-        <button id="btn-jump" class="quick-btn" title="점프 (Space)"><i data-icon="jump"></i>점프</button>
-      </div>
 
       <!-- 선택한 물건 도구 -->
       <div class="item-tools hidden" id="item-tools">
@@ -97,15 +87,23 @@
         <div class="cs-presets" id="cs-presets"></div>
       </div>
 
+      <!-- 모션 고르기 -->
+      <div class="chat-style motion-panel hidden" id="motion-panel">
+        <div class="cs-title">모션</div>
+        <div class="motion-list" id="motion-list"></div>
+      </div>
+
       <!-- ④ 채팅 입력줄 -->
       <div class="chatbar">
         <button class="btn chat-btn" id="btn-chatlog" title="채팅 기록 보이기/숨기기"><i data-icon="chat"></i><span>기록</span></button>
         <button class="btn chat-btn" id="btn-chatstyle" title="말풍선 꾸미기"><i data-icon="palette"></i><span>꾸미기</span></button>
+        <button class="btn chat-btn" id="btn-motion" title="모션"><i data-icon="hand"></i><span>모션</span></button>
         <input class="chat-input" id="chat-input" maxlength="80" placeholder="하고 싶은 말을 쓰고 Enter">
         <button class="btn btn-accent" id="chat-send">보내기</button>
       </div>
 
       <div id="party-wait" class="party-wait hidden"></div>
+      <div id="fade" class="fade"><span id="fade-text"></span></div>
       <div id="toast"></div>
     </section>
     </div>
@@ -191,6 +189,10 @@
             <p class="pane-note">섬 꾸밈과 시간·날씨는 섬 주인이 정해요. 마음껏 걷고 이야기 나눠요.</p>
             <a id="btn-home" class="wide-btn" href="./"><i data-icon="home"></i>내 섬으로 돌아가기</a>
           </div>
+          <div class="info-card hidden" id="plaza-card">
+            <div class="info-title">광장에 있어요</div>
+            <p class="pane-note">누구나 오가며 만나는 곳이에요. 벤치에 모여 이야기 나눠요. 위쪽 '우리 집 가기'로 언제든 내 섬에 돌아가요.</p>
+          </div>
           <div class="info-card">
             <div class="info-title">지금 섬에 있는 사람</div>
             <div id="people-list" class="people-list"></div>
@@ -222,7 +224,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.26</span>
+      <span class="version" title="지금 보고 있는 버전">v0.27</span>
     </nav>
   </div>
 
@@ -235,7 +237,7 @@
     <ul>
       <li><b>걷기</b> 땅을 클릭하거나 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</li>
       <li><b>달리기</b> 이동 키를 빠르게 두 번 누르고 그대로 누르기, 또는 땅을 더블클릭</li>
-      <li><b>점프 · 인사</b> <kbd>Space</kbd> · <kbd>1</kbd></li>
+      <li><b>점프 · 인사</b> <kbd>Space</kbd> · <kbd>1</kbd> (채팅에 "안녕"이라고 써도 손을 흔들어요)</li>
       <li><b>카메라 돌리기</b> 마우스를 누른 채 끌기 (또는 <kbd>Q</kbd><kbd>E</kbd>)</li>
       <li><b>가까이·멀리</b> 마우스 휠</li>
       <li><b>꾸미기</b> 오른쪽 메뉴 <b class="inline">아이템 → 가구</b> (또는 <kbd>I</kbd>) → 물건 고르기 → 땅 클릭</li>
@@ -253,13 +255,13 @@
 <!-- 친구 섬에 들어가기: 이름 적기 -->
 <div class="overlay hidden" id="join">
   <div class="card join-card">
-    <h2>친구 섬에 놀러 가요</h2>
+    <h2 id="join-title">친구 섬에 놀러 가요</h2>
     <p class="muted">친구에게 보일 이름을 적어 주세요. 로그인은 필요 없어요.</p>
     <input id="join-name" class="join-name" maxlength="10" placeholder="이름 (10자까지)">
     <p class="muted join-off hidden" id="join-off">아직 친구 섬과 연결할 수 없어요. 조금 뒤에 다시 열어 주세요.</p>
     <div class="join-actions">
       <button id="btn-join" class="main-btn">들어가기</button>
-      <a class="main-btn subtle" href="./">내 섬으로 가기</a>
+      <button id="btn-join-cancel" class="main-btn subtle">그만두기</button>
     </div>
   </div>
 </div>
@@ -277,6 +279,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.26"></script>
+<script type="module" src="js/main.js?v=0.27"></script>
 </body>
 </html>

@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.26';
-import { PALETTE as P } from './palette.js?v=0.26';
+import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.27';
+import { PALETTE as P } from './palette.js?v=0.27';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
@@ -43,6 +43,31 @@ export const OUTER_NATURE = (() => {
   return out;
 })();
 DEFAULT_ITEMS.push(...OUTER_NATURE);
+
+// 광장: 모두가 만나는 작은 마을 광장 (데모라 '광장인 걸 알 정도'로 작게)
+// 가운데 분수대, 둘레에 벤치 4개와 가로등 4개, 한쪽에 큰 나무 한 그루,
+// 가장자리로 뻗은 디딤돌 길 3갈래 (나중에 테마파크·상점·바닷가 입구를 붙일 자리)
+export const PLAZA_ITEMS = (() => {
+  const out = [];
+  const deg = (a) => Math.round((a * 180) / Math.PI);
+  const at = (type, a, r, rot = 0) => {
+    out.push({ id: `plaza-${out.length}`, type, x: Math.round(Math.sin(a) * r * 100) / 100, z: Math.round(Math.cos(a) * r * 100) / 100, rot });
+  };
+  out.push({ id: 'plaza-floor', type: 'plazaFloor', x: 0, z: 0, rot: 0 });
+  out.push({ id: 'plaza-fountain', type: 'fountain', x: 0, z: 0, rot: 22.5 });
+  // 벤치 4개: 모두 분수대를 바라봄. 길이 나가는 방향(앞·왼쪽 뒤·오른쪽 뒤)은 비워 둠
+  [Math.PI * 0.32, Math.PI * 0.68 + Math.PI * 0.32, -Math.PI * 0.32, -(Math.PI * 0.68 + Math.PI * 0.32)]
+    .forEach((a) => at('bench', a, 4.6, deg(a + Math.PI)));
+  [0.5, 1.5, -0.5, -1.5].forEach((k) => at('lamp', (Math.PI / 2) * k + Math.PI / 2 * 0, 7.2));
+  out.push({ id: 'plaza-bigtree', type: 'bigTree', x: -9.5, z: -6.5, rot: 20 }); // 큰 나무 한 그루
+  // 디딤돌 길 3갈래: 앞(처음 오는 곳), 왼쪽 뒤, 오른쪽 뒤
+  [0, Math.PI * 0.68 + Math.PI * 0.32 - Math.PI * 0.25, -(Math.PI * 0.75)].forEach((a, j) => {
+    for (let i = 0; i < 4; i++) at('stepStone', a, 8.6 + i * 1.4, (i + j) * 30);
+  });
+  // 가장자리 꽃·덤불 조금
+  [0.35, -0.35, 1.9, -1.9].forEach((a, i) => at(i % 2 ? 'flowers' : 'bush', a, 9.2, i * 45));
+  return out;
+})();
 
 let idCounter = 0;
 export function newId() {
@@ -160,6 +185,7 @@ export class World {
     const t = performance.now() / 1000;
     this.items.forEach(({ obj }) => {
       if (obj.userData.float) obj.userData.float.position.y = 1.3 + Math.sin(t * 1.4 + obj.position.x) * 0.12;
+      if (obj.userData.type === 'fountain') obj.children.forEach((c) => { if (c.userData.bob) c.position.y = 2.42 + Math.abs(Math.sin(t * 1.6)) * 0.12; });
     });
   }
 

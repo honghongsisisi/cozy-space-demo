@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.26';
-import { PRESETS } from './chat.js?v=0.26';
-import { openLink, netConfigured } from './net.js?v=0.26';
+import { Avatar } from './avatar.js?v=0.27';
+import { PRESETS } from './chat.js?v=0.27';
+import { openLink, netConfigured } from './net.js?v=0.27';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -53,7 +53,6 @@ export class Party {
     this.worldTimer = null;
     this.layer = document.getElementById('bubble-layer');
     this.myTag = this.makeTag(true);
-    this.hookChat();
   }
 
   get count() { return this.peers.size + 1; }
@@ -61,7 +60,8 @@ export class Party {
   start() {
     if (this.link || !netConfigured()) return false;
     this.link = openLink(this.roomId, (m) => this.handle(m), (s) => this.status(s));
-    window.addEventListener('pagehide', () => this.leave());
+    if (!Party.hooked) { Party.hooked = true; window.addEventListener('pagehide', () => Party.current && Party.current.leave()); }
+    Party.current = this;
     return true;
   }
 
@@ -70,6 +70,16 @@ export class Party {
     this.send({ t: 'bye' });
     this.link.close();
     this.link = null;
+  }
+
+  // 다른 공간으로 옮겨 갈 때: 연결을 끊고 친구 캐릭터·이름표를 모두 치움 (알림 없이)
+  dispose() {
+    this.leave();
+    clearTimeout(this.worldTimer);
+    this.peers.forEach((p) => { this.scene.remove(p.av.root); p.tag.remove(); this.chat.dropSpeaker(p.id); });
+    this.peers.clear();
+    this.myTag.remove();
+    this.disposed = true;
   }
 
   status(s) {
@@ -115,7 +125,7 @@ export class Party {
   handle(m) {
     if (!m || typeof m !== 'object' || typeof m.id !== 'string' || m.id === this.id) return;
     const name = cleanName(m.name) || '이름 없음';
-    const role = m.role === 'owner' ? 'owner' : 'guest';
+    const role = m.role === 'owner' ? 'owner' : m.role === 'visitor' ? 'visitor' : 'guest';
     let p = this.peers.get(m.id);
     if (m.t === 'bye') { if (p) this.removePeer(m.id, true); return; }
     if (!p) {
@@ -169,7 +179,7 @@ export class Party {
     const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false };
     this.peers.set(id, p);
     if (role === 'owner') this.ownerHere = true;
-    this.toast(role === 'owner' && this.role === 'guest' ? `${name}님의 섬에 들어왔어요` : `${name}님이 놀러 왔어요`);
+    if (this.role !== 'visitor' || this.peers.size < 8) this.toast(this.role === 'visitor' ? `${name}님이 광장에 왔어요` : role === 'owner' && this.role === 'guest' ? `${name}님의 섬에 들어왔어요` : `${name}님이 놀러 왔어요`);
     this.peopleChanged();
     return p;
   }
@@ -185,7 +195,7 @@ export class Party {
       this.ownerHere = [...this.peers.values()].some((q) => q.role === 'owner');
       if (this.role === 'guest' && !this.ownerHere) this.toast(`섬 주인 ${p.name}님이 섬을 나갔어요`);
     } else {
-      this.toast(`${p.name}님이 ${said ? '돌아갔어요' : '보이지 않아요'}`);
+      if (this.role !== 'visitor' || this.peers.size < 8) this.toast(`${p.name}님이 ${said ? '돌아갔어요' : '보이지 않아요'}`); // 광장이 붐비면 알림은 줄임
     }
     this.peopleChanged();
   }
@@ -195,12 +205,8 @@ export class Party {
     this.onPeople(list);
   }
 
-  // 채팅: 내 화면에 바로 띄우고(기존 그대로), 친구들에게도 보냄
-  hookChat() {
-    const t = this.chat.transport;
-    const orig = t.send.bind(t);
-    t.send = (msg) => { orig(msg); this.send({ t: 'chat', text: msg.text, preset: this.chat.preset }); };
-  }
+  // 채팅: 내 화면에는 원래대로 뜨고, 같은 공간 사람들에게도 보냄 (main.js에서 불러 줌)
+  sendChat(msg) { this.send({ t: 'chat', text: msg.text, preset: this.chat.preset }); }
 
   headOf(id) {
     const p = this.peers.get(id);
