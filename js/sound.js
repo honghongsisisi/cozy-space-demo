@@ -1,4 +1,5 @@
-// 효과음. 소리 파일을 쓰지 않고 브라우저에서 직접 만들어 냅니다(저작권 걱정 없음).
+// 효과음. 발소리·빗소리는 소리 파일 없이 브라우저에서 직접 만들어 냅니다(저작권 걱정 없음).
+// 맑은 날 풍경 소리만 녹음 파일(sounds/wind-chime.mp3, 출처는 CREDITS.md)을 씁니다.
 // 발소리 원리: '쉬익' 하는 잡음을 아주 짧게(0.1초 안팎) 틀고, 높은 음만 남기는 필터를 걸면
 // 마른 잎을 밟는 '사각' 소리처럼 들립니다. 매번 높이·길이를 조금씩 바꿔 기계적으로 들리지 않게 합니다.
 const KEY = 'cozy-space-demo:sound';
@@ -46,7 +47,7 @@ export class Sound {
     this.wantRain = on; this.wantIndoor = indoor;
     if (!this.ctx) return;
     if (!this.rainGain) this.buildRain();
-    const target = on && this.enabled ? (indoor ? 0.3 : 0.8) : 0; // 발소리보다 작게. 집 안에서는 창밖 빗소리처럼 작게
+    const target = on && this.enabled ? (indoor ? 0.6 : 1.6) : 0; // v0.29: 너무 작다고 해서 두 배로. 집 안에서는 창밖 빗소리처럼 작게
     if (this.rainTarget !== target) {
       this.rainTarget = target;
       this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
@@ -103,9 +104,37 @@ export class Sound {
     this.rainTarget = 0;
   }
 
+  // ---- 맑은 날 풍경 소리 ----
+  // 41초짜리 녹음을 끝없이 이어 틀어요. 파일의 끝과 처음을 3초 동안 겹쳐 두어서 이음새가 들리지 않아요.
+  // 파일은 맑음일 때 처음 한 번만 받아 와요.
+  setChime(on, indoor = false) {
+    this.wantChime = on; this.wantChimeIndoor = indoor;
+    if (!this.ctx) return;
+    if (!this.chimeGain) {
+      this.chimeGain = this.ctx.createGain(); this.chimeGain.gain.value = 0; this.chimeTarget = 0;
+      this.chimeGain.connect(this.master);
+    }
+    if (on && !this.chimeLoading) {
+      this.chimeLoading = true;
+      fetch('sounds/wind-chime.mp3?v=0.29').then((r) => r.arrayBuffer()).then((b) => this.ctx.decodeAudioData(b)).then((buf) => {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf; src.loop = true;
+        src.loopStart = 0.06; src.loopEnd = buf.duration - 0.06; // mp3 앞뒤의 아주 짧은 빈칸은 건너뜀
+        src.connect(this.chimeGain);
+        src.start(0, 0.06);
+      }).catch(() => { this.chimeLoading = false; });
+    }
+    const target = on && this.enabled ? (indoor ? 0.35 : 0.9) : 0; // 집 안에서는 창밖 풍경 소리처럼 작게
+    if (this.chimeTarget !== target) {
+      this.chimeTarget = target;
+      this.chimeGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.5); // 천천히 커지고 작아짐
+    }
+  }
+
   setEnabled(on) {
     this.enabled = on;
     if (this.ctx && this.wantRain !== undefined) this.setRain(this.wantRain, this.wantIndoor);
+    if (this.ctx && this.wantChime !== undefined) this.setChime(this.wantChime, this.wantChimeIndoor);
     try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* 무시 */ }
   }
 

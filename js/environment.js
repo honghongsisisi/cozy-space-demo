@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.28';
-import { glowMat, fireMat } from './catalog.js?v=0.28';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.28';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.29';
+import { glowMat, fireMat } from './catalog.js?v=0.29';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.29';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -253,6 +253,11 @@ export class Environment {
     const bottom = new THREE.Color(a.bottom).lerp(new THREE.Color(b.bottom), k).lerp(new THREE.Color(night > 0.5 ? 0x8a74b8 : 0xe2d9e6), cl * 0.45);
     this.skyMat.uniforms.bottom.value.copy(bottom);
     this.scene.fog.color.copy(bottom);
+    // 뿌연 안개: 흐린 날엔 멀리 있는 것부터 하늘빛으로 부드럽게 흐려짐 (비·눈 날은 조금만, 집 안에서는 없음)
+    const wantHaze = this.indoor ? 0 : ({ cloudy: 1, rain: 0.45, snow: 0.3 }[this.weather] || 0);
+    this.haze = (this.haze || 0) + (wantHaze - (this.haze || 0)) * Math.min(1, dt * 1.2);
+    this.scene.fog.near = 80 - this.haze * 76;  // 맑음 80 → 흐림 4
+    this.scene.fog.far = 380 - this.haze * 322; // 맑음 380 → 흐림 58
     // 집 창문 유리: 바깥 하늘빛
     if (this.world.windowMat) this.world.windowMat.color.copy(top).lerp(bottom, 0.55).lerp(this._c2.setHex(0xffffff), 0.15);
     // 집 안: 바깥(하늘)은 따뜻하고 차분한 단색 배경으로. 밤엔 조금 어둡게
