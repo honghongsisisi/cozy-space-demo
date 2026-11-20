@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.25">
+  <link rel="stylesheet" href="style.css?v=0.26">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -25,7 +25,7 @@
       <span id="room-title" class="room-title">나의 작은 섬</span>
       <input id="room-title-input" class="room-title-input hidden" maxlength="20">
       <button id="btn-title-edit" class="icon-btn" title="섬 이름 고치기"><i data-icon="pencil"></i></button>
-      <span class="room-visitors" title="방문자 수 (준비 중)"><i data-icon="person"></i>지금 1명 · 오늘 0 · 전체 0</span>
+      <span class="room-visitors" title="지금 섬에 있는 사람 수"><i data-icon="person"></i><b id="visitors-now">지금 1명</b> · 오늘 0 · 전체 0</span>
       <button class="btn soon" data-soon="파티 열기"><i data-icon="party"></i>파티 열기</button>
     </div>
 
@@ -101,10 +101,11 @@
       <div class="chatbar">
         <button class="btn chat-btn" id="btn-chatlog" title="채팅 기록 보이기/숨기기"><i data-icon="chat"></i><span>기록</span></button>
         <button class="btn chat-btn" id="btn-chatstyle" title="말풍선 꾸미기"><i data-icon="palette"></i><span>꾸미기</span></button>
-        <input class="chat-input" id="chat-input" maxlength="80" placeholder="하고 싶은 말을 쓰고 Enter (지금은 나만 보여요)">
+        <input class="chat-input" id="chat-input" maxlength="80" placeholder="하고 싶은 말을 쓰고 Enter">
         <button class="btn btn-accent" id="chat-send">보내기</button>
       </div>
 
+      <div id="party-wait" class="party-wait hidden"></div>
       <div id="toast"></div>
     </section>
     </div>
@@ -178,7 +179,23 @@
 
         <!-- 친구 -->
         <div class="pane hidden" data-pane="friends">
-          <div class="empty-card"><i class="empty-ico" data-icon="friends"></i><b>친구 기능은 준비 중이에요</b><p>친구 섬에 놀러 가고, 방명록을 남기는 기능을 만들 자리예요.</p></div>
+          <div class="info-card" id="invite-card">
+            <div class="info-title">친구 초대하기</div>
+            <p class="pane-note">아래 링크를 친구에게 보내면, 친구가 눌러서 내 섬에 놀러 와요. 내가 이 화면을 켜 둔 동안에만 들어올 수 있어요.</p>
+            <label class="name-field"><span>내 이름</span><input id="my-name" maxlength="10" placeholder="친구에게 보일 이름"></label>
+            <input id="invite-link" class="invite-link" readonly>
+            <button id="btn-invite" class="wide-btn accent"><i data-icon="link"></i>초대 링크 복사하기</button>
+          </div>
+          <div class="info-card hidden" id="guest-card">
+            <div class="info-title">친구 섬에 놀러 왔어요</div>
+            <p class="pane-note">섬 꾸밈과 시간·날씨는 섬 주인이 정해요. 마음껏 걷고 이야기 나눠요.</p>
+            <a id="btn-home" class="wide-btn" href="./"><i data-icon="home"></i>내 섬으로 돌아가기</a>
+          </div>
+          <div class="info-card">
+            <div class="info-title">지금 섬에 있는 사람</div>
+            <div id="people-list" class="people-list"></div>
+          </div>
+          <p class="pane-note hidden" id="net-off">친구 초대는 서버 연결을 마친 뒤에 쓸 수 있어요. (준비 중)</p>
         </div>
 
         <!-- 관리 -->
@@ -205,7 +222,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.25</span>
+      <span class="version" title="지금 보고 있는 버전">v0.26</span>
     </nav>
   </div>
 
@@ -233,6 +250,20 @@
   </div>
 </div>
 
+<!-- 친구 섬에 들어가기: 이름 적기 -->
+<div class="overlay hidden" id="join">
+  <div class="card join-card">
+    <h2>친구 섬에 놀러 가요</h2>
+    <p class="muted">친구에게 보일 이름을 적어 주세요. 로그인은 필요 없어요.</p>
+    <input id="join-name" class="join-name" maxlength="10" placeholder="이름 (10자까지)">
+    <p class="muted join-off hidden" id="join-off">아직 친구 섬과 연결할 수 없어요. 조금 뒤에 다시 열어 주세요.</p>
+    <div class="join-actions">
+      <button id="btn-join" class="main-btn">들어가기</button>
+      <a class="main-btn subtle" href="./">내 섬으로 가기</a>
+    </div>
+  </div>
+</div>
+
 <!-- 사진 미리보기 -->
 <div class="overlay hidden" id="photo-modal">
   <div class="card photo-card">
@@ -245,6 +276,7 @@
 </div>
 <div id="flash"></div>
 
-<script type="module" src="js/main.js?v=0.25"></script>
+<script src="vendor/supabase.js?v=2.119.0"></script>
+<script type="module" src="js/main.js?v=0.26"></script>
 </body>
 </html>
