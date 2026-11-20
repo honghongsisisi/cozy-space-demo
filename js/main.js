@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.31';
-import { Avatar } from './avatar.js?v=0.31';
-import { Environment } from './environment.js?v=0.31';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.31';
-import { saveState, loadState } from './storage.js?v=0.31';
-import { Sound } from './sound.js?v=0.31';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.31';
-import { fmt } from './realtime.js?v=0.31';
-import { icon, fillIcons } from './icons.js?v=0.31';
-import { makeThumbnails } from './thumbs.js?v=0.31';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.31';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.32';
+import { Avatar } from './avatar.js?v=0.32';
+import { Environment } from './environment.js?v=0.32';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.32';
+import { saveState, loadState } from './storage.js?v=0.32';
+import { Sound } from './sound.js?v=0.32';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.32';
+import { fmt } from './realtime.js?v=0.32';
+import { icon, fillIcons } from './icons.js?v=0.32';
+import { makeThumbnails } from './thumbs.js?v=0.32';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.32';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1021,7 +1021,7 @@ function moveTo(dest) {
       toast(dest === 'plaza' ? '광장에 왔어요' : '우리 집에 왔어요');
     }, 380);
   };
-  if (dest === 'plaza') askName('광장에 가요', go); else go();
+  go(); // 광장은 이름을 묻지 않고 바로 감 (이름이 없으면 '나그네', 친구 메뉴에서 언제든 바꿀 수 있음)
 }
 goBtn.addEventListener('click', () => moveTo(space === 'plaza' ? 'home' : 'plaza'));
 document.getElementById('btn-home').addEventListener('click', (e) => { e.preventDefault(); moveTo('home'); });
