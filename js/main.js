@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.28';
-import { Avatar } from './avatar.js?v=0.28';
-import { Environment } from './environment.js?v=0.28';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.28';
-import { saveState, loadState } from './storage.js?v=0.28';
-import { Sound } from './sound.js?v=0.28';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.28';
-import { fmt } from './realtime.js?v=0.28';
-import { icon, fillIcons } from './icons.js?v=0.28';
-import { makeThumbnails } from './thumbs.js?v=0.28';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.28';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.29';
+import { Avatar } from './avatar.js?v=0.29';
+import { Environment } from './environment.js?v=0.29';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.29';
+import { saveState, loadState } from './storage.js?v=0.29';
+import { Sound } from './sound.js?v=0.29';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.29';
+import { fmt } from './realtime.js?v=0.29';
+import { icon, fillIcons } from './icons.js?v=0.29';
+import { makeThumbnails } from './thumbs.js?v=0.29';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.29';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1166,6 +1166,7 @@ function frame() {
   if (party) party.update(dt);
   chat.update();
   sound.setRain(env.weather === 'rain', inside); // 비가 오면 빗소리 (집 안에서는 작게)
+  sound.setChime(env.weather === 'clear', inside); // 맑으면 풍경 소리 (집 안에서는 작게)
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

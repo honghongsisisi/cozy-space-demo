@@ -11,4 +11,5 @@
 
 ## 소리
 - 발소리, 빗소리: 녹음 파일을 쓰지 않고 `js/sound.js`에서 코드로 직접 만든 소리예요. 저작권 걱정이 없어요.
+- 맑은 날 풍경 소리 (`sounds/wind-chime.mp3`): "Bell Wind Chime" by joseegn — https://freesound.org/people/joseegn/sounds/752612/ (Freesound). 이어 틀기 좋게 끝과 처음을 3초 겹치고 소리를 키워서 mp3로 바꿈.
 - 녹음된 소리를 새로 넣을 때는 CC0나 퍼블릭 도메인처럼 상업적으로 써도 되는 것만 쓰고, 여기에 출처와 라이선스를 적어 주세요.
