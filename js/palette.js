@@ -21,6 +21,20 @@ export const PALETTE = {
   paving: 0xe2d6c4,      // 따뜻한 돌 바닥
   pavingLine: 0xd2c4ae,  // 바닥 무늬
   fountainWater: 0xa9cfe0, // 분수 물 (차분한 하늘색, 광택 없음)
+  // 집 (둥근 지붕 오두막) · 집 안
+  houseWall: 0xf1e6d2,   // 바깥벽 크림
+  roof: 0x9e7a64,        // 지붕: 차분한 코코아빛 (진한 빨강 대신)
+  roofLine: 0x8c6a56,    // 지붕 기와 줄
+  sage: 0xa9bda6,        // 창틀·러그 등 세이지
+  floorWood: 0xd8b48c,   // 마루
+  floorLine: 0xc29c74,   // 마루 널판 줄
+  wallpaper: 0xf3e9d8,   // 벽지
+  wallDot: 0xe2d6bf,     // 벽지 무늬
+  wainscot: 0xc9b496,    // 벽 아래 나무 판
+  fabric: 0xeadfcf,      // 이불·쿠션
+  fabric2: 0xc8d3c0,     // 이불 두 번째 색 (옅은 세이지)
+  book: [0xb7a08a, 0xa9bda6, 0xd9c3a5, 0x9e8a7a],
+  pot: 0xc29a7c,         // 화분
   // 아바타
   skin: 0xffe4d6,
   hair: 0x7b543f,

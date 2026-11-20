@@ -2,12 +2,38 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat } from './catalog.js?v=0.27';
-import { PALETTE as P } from './palette.js?v=0.27';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat } from './catalog.js?v=0.28';
+import { PALETTE as P } from './palette.js?v=0.28';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
+// 우리 집 자리: 섬 뒤쪽 오른편. 문은 처음 서 있는 쪽을 비스듬히 바라봄 (벤치에 길이 막히지 않게)
+export const HOUSE_SPOT = { type: 'cottage', x: 5.5, z: -10.5, rot: -20 };
+// 집이 차지하는 네모 (+ 둘레 여유). 이 안에 있는 물건은 집과 겹침
+export function inHouseArea(h, x, z, margin = 0.7) {
+  const a = (h.rot || 0) * Math.PI / 180, dx = x - h.x, dz = z - h.z;
+  const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
+  return Math.abs(lx) < 2.65 + margin && lz > -1.95 - margin && lz < 2.9 + margin; // 앞쪽은 발판·문 앞까지
+}
+
+// 집 안: 작은 네모 방 하나 (가로 12, 세로 10)
+export const ROOM_W = 12, ROOM_D = 10, ROOM_H = 3.4;
+export const ROOM_DOOR = { x: 0, z: ROOM_D / 2 - 0.55 };   // 안쪽 문 앞 (여기까지 걸어가면 밖으로)
+export const ROOM_SPAWN = { x: 0, z: ROOM_D / 2 - 2.0 };   // 들어왔을 때 서는 자리
+export const DEFAULT_ROOM_ITEMS = [
+  { type: 'rug', x: 0.5, z: 0.3, rot: 0 },
+  { type: 'table', x: 0.5, z: 0.1, rot: 0 },
+  { type: 'chair', x: -0.55, z: 0.15, rot: 90 },
+  { type: 'chair', x: 1.55, z: 0.15, rot: 270 },
+  { type: 'bed', x: -4.1, z: -3.55, rot: 0 },
+  { type: 'shelf', x: 2.6, z: -4.45, rot: 0 },
+  { type: 'potPlant', x: 4.9, z: -4.1, rot: 0 },
+  { type: 'potPlant', x: -5.0, z: 3.6, rot: 45 },
+  { type: 'floatLantern', x: 4.2, z: 1.8, rot: 0 },
+];
+
 export const DEFAULT_ITEMS = [
+  { ...HOUSE_SPOT },
   { type: 'treeRound', x: -6, z: -5.5, rot: 0 },
   { type: 'treeRound', x: 6.5, z: -6, rot: 45 },
   { type: 'treePine', x: -8, z: 2.5, rot: 0 },
@@ -42,7 +68,7 @@ export const OUTER_NATURE = (() => {
   }
   return out;
 })();
-DEFAULT_ITEMS.push(...OUTER_NATURE);
+DEFAULT_ITEMS.push(...OUTER_NATURE.filter((n) => !inHouseArea(HOUSE_SPOT, n.x, n.z)));
 
 // 광장: 모두가 만나는 작은 마을 광장 (데모라 '광장인 걸 알 정도'로 작게)
 // 가운데 분수대, 둘레에 벤치 4개와 가로등 4개, 한쪽에 큰 나무 한 그루,
@@ -81,7 +107,11 @@ export class World {
     this.root = new THREE.Group();
     scene.add(this.root);
     this.listeners = [];
+    this.outdoor = new THREE.Group(); // 섬·물 (집 안에 있을 때는 숨김)
+    scene.add(this.outdoor);
     this.buildTerrain();
+    this.buildRoom();
+    this.indoor = false;
   }
 
   onChange(fn) { this.listeners.push(fn); }
@@ -96,7 +126,7 @@ export class World {
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.y = -0.9;
     this.water.receiveShadow = true;
-    this.scene.add(this.water);
+    this.outdoor.add(this.water);
 
     // 물결 반짝임 (가는 줄무늬 그림을 천천히 흘려 보냄)
     const c = document.createElement('canvas');
@@ -119,7 +149,7 @@ export class World {
     this.ripples.rotation.x = -Math.PI / 2;
     this.ripples.position.y = -0.88;
     this.rippleTex = tex;
-    this.scene.add(this.ripples);
+    this.outdoor.add(this.ripples);
     // 두 번째 물결 층: 크기·속도·방향을 조금 다르게 해서 물이 흘러가는 느낌을 줌
     const tex2 = tex.clone();
     tex2.needsUpdate = true;
@@ -132,19 +162,20 @@ export class World {
     this.ripples2.rotation.x = -Math.PI / 2;
     this.ripples2.position.y = -0.87;
     this.rippleTex2 = tex2;
-    this.scene.add(this.ripples2);
+    this.outdoor.add(this.ripples2);
 
     // 마당: 물 위에 뜬 둥근 섬 (잔디 + 흙 + 나무 테두리)
     const R = PLOT_RADIUS;
     const soil = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R - 1.6, 1.6, 72), mat(P.plotSide));
     soil.position.y = -0.82;
     soil.receiveShadow = true;
-    this.scene.add(soil);
+    this.outdoor.add(soil);
     const top = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.1, 96), mat(P.plotGrass));
     top.position.y = -0.05;
     top.receiveShadow = true;
-    this.scene.add(top);
+    this.outdoor.add(top);
     this.groundPick = top;
+    this.islandTop = top;
     // 나무 말뚝 테두리: 손으로 박은 것처럼 간격·굵기·높이·기울기를 조금씩 다르게
     let sv = 11; const rnd = () => ((sv = (sv * 9301 + 49297) % 233280) / 233280); // 늘 같은 모양이 나오는 난수
     const post = new THREE.CylinderGeometry(0.16, 0.18, 0.5, 6);
@@ -159,7 +190,7 @@ export class World {
       pm.position.set(Math.cos(a) * rr, -0.05 + h / 2 - 0.1, Math.sin(a) * rr);
       pm.rotation.set((rnd() - 0.5) * 0.12, rnd() * Math.PI, (rnd() - 0.5) * 0.12);
       pm.castShadow = true; pm.receiveShadow = true;
-      this.scene.add(pm);
+      this.outdoor.add(pm);
       a += (0.3 * thick + 0.02 + rnd() * 0.05) / R; // 말뚝 굵기만큼 띄우고, 사이 간격도 들쭉날쭉
     }
 
@@ -170,7 +201,180 @@ export class World {
     this.grid.material.opacity = 0.16;
     this.grid.position.y = 0.01;
     this.grid.visible = false;
-    this.scene.add(this.grid);
+    this.outdoor.add(this.grid);
+  }
+
+  // ---- 집 안 (작은 방 하나) ----
+  // 벽 네 면 중 카메라 쪽 벽은 낮게 깎여서, 언제나 안쪽 벽 두세 면만 보여요 (카메라를 돌려도)
+  buildRoom() {
+    const W = ROOM_W, D = ROOM_D, H = ROOM_H, T = 0.3;
+    const room = new THREE.Group();
+    room.visible = false;
+    this.scene.add(room);
+    this.room = room;
+    const tex = (draw, rx, ry) => {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      draw(c.getContext('2d'));
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
+      return t;
+    };
+    const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+    // 마루: 꿀빛 나무 널판 (반짝이지 않게)
+    const floorTex = tex((ctx) => {
+      ctx.fillStyle = hex(P.floorWood); ctx.fillRect(0, 0, 128, 128);
+      ctx.fillStyle = hex(P.floorLine);
+      for (let i = 0; i < 4; i++) { ctx.fillRect(0, i * 32, 128, 2); ctx.fillRect(((i * 53) % 128), i * 32, 2, 32); ctx.fillRect(((i * 53 + 64) % 128), i * 32, 2, 32); }
+    }, W / 4, D / 4);
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.2, D), new THREE.MeshLambertMaterial({ map: floorTex }));
+    floor.position.y = -0.1; floor.receiveShadow = true;
+    room.add(floor);
+    this.roomFloor = floor;
+    // 방 아래 받침 (얇은 종이처럼 보이지 않게)
+    const base = new THREE.Mesh(new THREE.BoxGeometry(W + 2 * T, 0.7, D + 2 * T), mat(P.woodDark));
+    base.position.y = -0.55; base.receiveShadow = true;
+    room.add(base);
+    // 벽지: 크림 바탕에 아주 옅은 점 무늬
+    const paper = (len) => new THREE.MeshLambertMaterial({ map: tex((ctx) => {
+      ctx.fillStyle = hex(P.wallpaper); ctx.fillRect(0, 0, 128, 128);
+      ctx.fillStyle = hex(P.wallDot);
+      [[32, 32], [96, 96]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); });
+    }, len / 1.4, H / 1.4) });
+    // 창문 유리는 바깥 하늘빛을 받아요 (환경에서 색을 바꿈)
+    this.windowMat = new THREE.MeshBasicMaterial({ color: 0xd8ecf8 });
+    const addWindow = (wall, list, x, w = 1.5, h = 1.3, y = 1.85) => {
+      const g = new THREE.Group();
+      const fr = mat(P.sage);
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.windowMat);
+      glass.position.z = 0.005;
+      g.add(glass);
+      [[0, h / 2 + 0.06, w + 0.24, 0.12], [0, -h / 2 - 0.06, w + 0.24, 0.12], [0, 0, w, 0.06]].forEach(([px, py, bw, bh]) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.1), fr); b.position.set(px, py, 0.04); g.add(b);
+      });
+      [-w / 2 - 0.06, w / 2 + 0.06, 0].forEach((px, i) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(i < 2 ? 0.12 : 0.06, h, 0.1), fr); b.position.set(px, 0, 0.04); g.add(b);
+      });
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.08, 0.22), mat(P.wood)); sill.position.set(0, -h / 2 - 0.14, 0.1); g.add(sill);
+      g.position.set(x, y, T / 2 + 0.01);
+      wall.add(g);
+      list.push(g);
+    };
+    // 벽 하나: 안쪽(+z 쪽)이 방을 보도록 만든 뒤 돌려서 세움
+    const makeWall = (len, px, pz, rotY, opts = {}) => {
+      const wall = new THREE.Group();
+      wall.userData.windows = [];
+      const body = new THREE.Group(); // 이 묶음만 위아래로 줄였다 늘림
+      wall.add(body);
+      const pieces = opts.gap
+        ? [[-(len / 2 + opts.gap / 2) / 2, len / 2 - opts.gap / 2], [(len / 2 + opts.gap / 2) / 2, len / 2 - opts.gap / 2]]
+        : [[0, len]];
+      pieces.forEach(([cx, pl]) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(pl, H, T), [mat(P.houseWall), mat(P.houseWall), mat(P.wood), mat(P.houseWall), paper(pl), mat(P.houseWall)]);
+        m.position.set(cx, H / 2, 0); m.receiveShadow = true;
+        body.add(m);
+        const wain = new THREE.Mesh(new THREE.BoxGeometry(pl, 0.95, 0.06), mat(P.wainscot)); // 벽 아래 나무 판
+        wain.position.set(cx, 0.475, T / 2 + 0.03); body.add(wain);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(pl, 0.08, 0.1), mat(P.wood));
+        rail.position.set(cx, 0.97, T / 2 + 0.05); body.add(rail);
+        const top = new THREE.Mesh(new THREE.BoxGeometry(pl + 0.02, 0.12, T + 0.08), mat(P.wood));
+        top.position.set(cx, H, 0); body.add(top);
+      });
+      if (opts.gap) { // 문 위 벽
+        const lin = new THREE.Mesh(new THREE.BoxGeometry(opts.gap + 0.02, H - 2.5, T), [mat(P.houseWall), mat(P.houseWall), mat(P.wood), mat(P.houseWall), paper(opts.gap), mat(P.houseWall)]);
+        lin.position.set(0, 2.5 + (H - 2.5) / 2, 0); body.add(lin);
+      }
+      (opts.windows || []).forEach((x) => addWindow(body, wall.userData.windows, x));
+      wall.position.set(px, 0, pz);
+      wall.rotation.y = rotY;
+      wall.userData.body = body;
+      wall.userData.normal = new THREE.Vector3(-Math.sin(rotY), 0, -Math.cos(rotY)); // 바깥쪽 방향
+      wall.userData.cut = 1;
+      room.add(wall);
+      return wall;
+    };
+    this.walls = [
+      makeWall(W + T * 2, 0, -D / 2 - T / 2, 0, { windows: [-2.6, 2.6] }),        // 뒤
+      makeWall(D, -W / 2 - T / 2, 0, Math.PI / 2, { windows: [0] }),              // 왼쪽
+      makeWall(D, W / 2 + T / 2, 0, -Math.PI / 2, { windows: [0] }),              // 오른쪽
+      makeWall(W + T * 2, 0, D / 2 + T / 2, Math.PI, { gap: 1.5 }),               // 앞 (문 자리 비움)
+    ];
+    // 앞쪽 문: 벽이 낮게 깎여도 문은 그대로 서 있어서 '나가는 곳'이 늘 보여요
+    const door = new THREE.Group();
+    const dark = mat(P.woodDark), wood = mat(P.wood);
+    const shape = (hw, hh) => { const s = new THREE.Shape(); s.moveTo(-hw, 0); s.lineTo(-hw, hh); s.absarc(0, hh, hw, Math.PI, 0, true); s.lineTo(hw, 0); s.lineTo(-hw, 0); return s; };
+    const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(shape(0.78, 1.75), { depth: T + 0.1, bevelEnabled: false }), dark);
+    fr.position.z = -(T + 0.1) / 2; door.add(fr);
+    const pane = new THREE.Mesh(new THREE.ExtrudeGeometry(shape(0.6, 1.7), { depth: 0.08, bevelEnabled: false }), wood);
+    pane.position.z = -T / 2 - 0.1; door.add(pane);
+    [-0.2, 0.2].forEach((x) => { const l = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.9, 0.02), dark); l.position.set(x, 1.15, -T / 2 - 0.11); door.add(l); });
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), mat(P.stoneDark)); knob.position.set(-0.38, 1.05, -T / 2 - 0.13); door.add(knob);
+    const dwin = new THREE.Mesh(new THREE.CircleGeometry(0.2, 14), glowMat); dwin.position.set(0, 1.95, -T / 2 - 0.115); dwin.rotation.y = Math.PI; door.add(dwin);
+    door.position.set(0, 0, D / 2 + T / 2);
+    door.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    room.add(door);
+    this.roomDoor = door;
+    // 문 앞 매트 (세이지)
+    const matt = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.025, 0.75), mat(P.sage));
+    matt.position.set(0, 0.0125, D / 2 - 0.5); matt.receiveShadow = true;
+    room.add(matt);
+    // 모서리 기둥
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(T + 0.06, H + 0.1, T + 0.06), mat(P.wood));
+      p.position.set(sx * (W / 2 + T / 2), (H + 0.1) / 2, sz * (D / 2 + T / 2));
+      p.userData.corner = [sx, sz];
+      room.add(p);
+    });
+    this.corners = room.children.filter((o) => o.userData.corner);
+    // 꾸미기 격자 (방 크기)
+    this.roomGrid = new THREE.GridHelper(W, W, 0xffffff, 0xffffff);
+    this.roomGrid.scale.z = D / W;
+    this.roomGrid.material.transparent = true; this.roomGrid.material.opacity = 0.2;
+    this.roomGrid.position.y = 0.01; this.roomGrid.visible = false;
+    room.add(this.roomGrid);
+  }
+
+  // 마당 ↔ 집 안 바꾸기
+  setIndoor(on) {
+    this.indoor = on;
+    this.outdoor.visible = !on;
+    this.room.visible = on;
+    this.groundPick = on ? this.roomFloor : this.islandTop;
+    this.grid.visible = false; this.roomGrid.visible = false;
+    if (on) this.walls.forEach((w) => { w.userData.cut = -1; }); // 처음 한 번은 바로 맞춤
+  }
+  get activeGrid() { return this.indoor ? this.roomGrid : this.grid; }
+
+  // 카메라 쪽 벽은 낮게: 벽의 바깥 방향과 카메라 방향이 같으면 깎음 (천천히)
+  updateWalls(dt, camPos) {
+    if (!this.indoor) return;
+    const LOW = 0.12;
+    this.walls.forEach((w) => {
+      const toCam = new THREE.Vector3(camPos.x, 0, camPos.z).normalize(); // 방 가운데에서 카메라 쪽 방향
+      const want = w.userData.normal.dot(toCam) > 0.3 ? LOW : 1;
+      const cur = w.userData.cut < 0 ? want : w.userData.cut + (want - w.userData.cut) * Math.min(1, dt * 6);
+      w.userData.cut = cur;
+      w.userData.body.scale.y = cur;
+      w.userData.windows.forEach((g) => { g.visible = cur > 0.7; });
+    });
+    // 모서리 기둥: 붙은 두 벽 중 하나라도 깎이면 같이 낮춤
+    this.corners.forEach((p) => {
+      const [sx, sz] = p.userData.corner;
+      const wx = this.walls[sx < 0 ? 1 : 2].userData.cut, wz = this.walls[sz < 0 ? 0 : 3].userData.cut;
+      p.scale.y = Math.min(wx, wz);
+      p.position.y = ((ROOM_H + 0.1) / 2) * p.scale.y;
+    });
+  }
+
+  // 집 문 앞 자리 (마당에서): 여기까지 걸어가면 집 안으로
+  doors() {
+    const out = [];
+    this.items.forEach(({ data }) => {
+      const d = ITEM_BY_TYPE[data.type].door;
+      if (!d) return;
+      const a = data.rot * Math.PI / 180;
+      out.push({ id: data.id, x: data.x + d.x * Math.cos(a) + d.z * Math.sin(a), z: data.z - d.x * Math.sin(a) + d.z * Math.cos(a), rot: data.rot });
+    });
+    return out;
   }
 
   update(dt) {
@@ -256,8 +460,12 @@ export class World {
   colliders() {
     const out = [];
     this.items.forEach(({ data }) => {
-      const r = ITEM_BY_TYPE[data.type].radius;
-      if (r > 0) out.push({ x: data.x, z: data.z, r });
+      const def = ITEM_BY_TYPE[data.type];
+      if (def.colliders) {
+        // 집처럼 네모난 물건: 여러 동그라미를 물건 방향에 맞춰 돌려서 놓음
+        const a = data.rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+        def.colliders.forEach((k) => out.push({ x: data.x + k.x * c + k.z * s, z: data.z - k.x * s + k.z * c, r: k.r }));
+      } else if (def.radius > 0) out.push({ x: data.x, z: data.z, r: def.radius });
     });
     return out;
   }
@@ -265,6 +473,10 @@ export class World {
 
 export function snap(v) {
   return Math.round(v * 2) / 2; // 0.5칸 단위로 맞추기
+}
+// 방 밖으로 나가지 않게 (벽 안쪽으로)
+export function clampToRoom(x, z, pad = 0.45) {
+  return { x: Math.max(-ROOM_W / 2 + pad, Math.min(ROOM_W / 2 - pad, x)), z: Math.max(-ROOM_D / 2 + pad, Math.min(ROOM_D / 2 - pad, z)) };
 }
 // 섬 밖으로 나가지 않게 안쪽으로 당기기
 export function clampToPlot(x, z) {

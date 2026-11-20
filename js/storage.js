@@ -1,12 +1,12 @@
 // 브라우저에 저장하기 / 불러오기
 // 나중에 친구 방문 기능을 만들 때는 이 파일만 서버 저장으로 바꾸면 됩니다.
-import { OUTER_NATURE, newId } from './world.js?v=0.27';
+import { OUTER_NATURE, HOUSE_SPOT, DEFAULT_ROOM_ITEMS, inHouseArea, clampToPlot, newId } from './world.js?v=0.28';
 
 const KEY = 'cozy-space-demo:v1';
 
 export function saveState(state) {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ version: 3, savedAt: Date.now(), ...state }));
+    localStorage.setItem(KEY, JSON.stringify({ version: 4, savedAt: Date.now(), ...state }));
     return true;
   } catch (e) {
     return false;
@@ -27,7 +27,24 @@ export function loadState() {
       OUTER_NATURE.forEach((n) => { if (!mine.some((m) => Math.hypot(m.x - n.x, m.z - n.z) < 1.2)) mine.push({ ...n, id: newId() }); });
       s.items = mine; s.version = 3;
     }
-    return s.version === 3 ? s : null;
+    // 3판 → 4판: 섬에 '우리 집'이 생김. 집 자리와 겹치는 물건은 옆으로 비켜 주고(처음부터 있던 자연물은 치움), 집 안은 기본 방으로
+    if (s.version === 3) {
+      let mine = s.items || [];
+      if (!mine.some((m) => m.type === 'cottage')) {
+        const h = HOUSE_SPOT;
+        mine = mine.filter((m) => !(inHouseArea(h, m.x, m.z) && OUTER_NATURE.some((n) => n.type === m.type && Math.hypot(n.x - m.x, n.z - m.z) < 0.05)));
+        mine.forEach((m) => {
+          if (!inHouseArea(h, m.x, m.z)) return;
+          const side = m.x - h.x >= 0 ? 1 : -1; // 집 옆으로 비켜 줌
+          const c = clampToPlot(h.x + side * (3.6 + Math.random() * 0.8), m.z);
+          m.x = Math.round(c.x * 100) / 100; m.z = Math.round(c.z * 100) / 100;
+        });
+        mine.unshift({ ...h, id: newId() });
+      }
+      s.items = mine; s.version = 4;
+    }
+    if (s.version === 4 && !(s.house && Array.isArray(s.house.items))) s.house = { items: DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() })) };
+    return s.version === 4 ? s : null;
   } catch (e) {
     return null;
   }

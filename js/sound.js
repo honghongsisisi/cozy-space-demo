@@ -42,11 +42,11 @@ export class Sound {
   //  ② 잎사귀 방울: 부드러운 '투둑' 가끔 (음 높이가 없는 소리라 통통 튀지 않음)
   //  ③ 바탕: 아주 작고 가벼운 빗소리 (낮게 울리는 소리는 빼서 천둥 느낌 없음)
   // 빗방울 자리를 8초 안에서 돌려 붙여서, 이어 틀 때 이음새가 들리지 않습니다.
-  setRain(on) {
-    this.wantRain = on;
+  setRain(on, indoor = false) {
+    this.wantRain = on; this.wantIndoor = indoor;
     if (!this.ctx) return;
     if (!this.rainGain) this.buildRain();
-    const target = on && this.enabled ? 0.8 : 0; // 발소리보다 작게
+    const target = on && this.enabled ? (indoor ? 0.3 : 0.8) : 0; // 발소리보다 작게. 집 안에서는 창밖 빗소리처럼 작게
     if (this.rainTarget !== target) {
       this.rainTarget = target;
       this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 1.2); // 천천히 커지고 작아짐
@@ -105,7 +105,7 @@ export class Sound {
 
   setEnabled(on) {
     this.enabled = on;
-    if (this.ctx && this.wantRain !== undefined) this.setRain(this.wantRain);
+    if (this.ctx && this.wantRain !== undefined) this.setRain(this.wantRain, this.wantIndoor);
     try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) { /* 무시 */ }
   }
 

@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.27';
-import { PRESETS } from './chat.js?v=0.27';
-import { openLink, netConfigured } from './net.js?v=0.27';
+import { Avatar } from './avatar.js?v=0.28';
+import { PRESETS } from './chat.js?v=0.28';
+import { openLink, netConfigured } from './net.js?v=0.28';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -41,8 +41,9 @@ const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export class Party {
-  constructor({ scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast }) {
+  constructor({ scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, getInside, onWorld, onPeople, toast }) {
     Object.assign(this, { scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast });
+    this.getInside = getInside || (() => false); // 내가 집 안에 있는지 (같은 곳에 있는 사람끼리만 보이게)
     this.id = randId(8); // 이 창의 이름표 (창마다 다름)
     this.peers = new Map(); // id → { name, role, av, tag, tx, tz, f, r, last }
     this.link = null;
@@ -101,8 +102,8 @@ export class Party {
 
   sendState(force) {
     const a = this.avatar;
-    const s = { t: 'st', x: r2(a.position.x), z: r2(a.position.z), f: r2(a.facing), r: a.running ? 1 : 0 };
-    const key = `${s.x},${s.z},${s.f},${s.r}`;
+    const s = { t: 'st', x: r2(a.position.x), z: r2(a.position.z), f: r2(a.facing), r: a.running ? 1 : 0, s: this.getInside() ? 1 : 0 };
+    const key = `${s.x},${s.z},${s.f},${s.r},${s.s}`;
     const now = performance.now();
     if (!force && key === this.lastSent.key && now - this.lastSent.t < 3000) return; // 그대로면 3초에 한 번만
     if (!force && now - this.lastSent.t < 160) return; // 움직여도 1초에 6번까지만
@@ -143,7 +144,8 @@ export class Party {
         break;
       case 'st':
         p.tx = num(m.x, 30); p.tz = num(m.z, 30); p.f = num(m.f, 10); p.r = !!m.r;
-        if (!p.placed) { p.av.restore({ x: p.tx, z: p.tz, facing: p.f }); p.placed = true; p.av.root.visible = true; p.tag.style.display = ''; }
+        if (!!m.s !== p.inside) { p.inside = !!m.s; p.jumpNext = true; } // 집 안 ↔ 마당을 오가면 걸어오지 않고 바로 그 자리에
+        if (!p.placed) { p.av.restore({ x: p.tx, z: p.tz, facing: p.f }); p.placed = true; p.jumpNext = false; }
         break;
       case 'act':
         if (m.a === 'jump') p.av.jump();
@@ -160,9 +162,11 @@ export class Party {
         if (this.role === 'guest' && role === 'owner' && Array.isArray(m.items)) {
           const first = !this.gotWorld;
           this.gotWorld = true;
+          const clean = (list) => (Array.isArray(list) ? list : []).slice(0, 600).map((it) => ({ id: String(it.id || '').slice(0, 40), type: String(it.type || ''), x: num(it.x, 30), z: num(it.z, 30), rot: num(it.rot, 720) }));
           this.onWorld({
             title: String(m.title || '친구의 섬').slice(0, 20),
-            items: m.items.slice(0, 600).map((it) => ({ id: String(it.id || '').slice(0, 40), type: String(it.type || ''), x: num(it.x, 30), z: num(it.z, 30), rot: num(it.rot, 720) })),
+            items: clean(m.items),
+            house: clean(m.house),
             env: m.env && typeof m.env === 'object' ? { time: num(m.env.time, 24), weather: String(m.env.weather || 'clear'), realTime: !!m.env.realTime, flowing: false } : null,
           }, first);
         }
@@ -176,7 +180,7 @@ export class Party {
     const tag = this.makeTag(false, role === 'owner');
     tag.textContent = name;
     tag.style.display = 'none';
-    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false };
+    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false, inside: false };
     this.peers.set(id, p);
     if (role === 'owner') this.ownerHere = true;
     if (this.role !== 'visitor' || this.peers.size < 8) this.toast(this.role === 'visitor' ? `${name}님이 광장에 왔어요` : role === 'owner' && this.role === 'guest' ? `${name}님의 섬에 들어왔어요` : `${name}님이 놀러 왔어요`);
@@ -210,7 +214,7 @@ export class Party {
 
   headOf(id) {
     const p = this.peers.get(id);
-    return p && p.placed ? p.av.position.clone().add(new THREE.Vector3(0, 2.15 + p.av.y, 0)) : null;
+    return p && p.placed && p.inside === this.getInside() ? p.av.position.clone().add(new THREE.Vector3(0, 2.15 + p.av.y, 0)) : null;
   }
 
   makeTag(me, owner) {
@@ -241,6 +245,10 @@ export class Party {
       if (now - p.last > 10000) { this.removePeer(id, false); return; } // 10초 동안 소식이 없으면 나간 걸로
       if (!p.placed) return;
       const av = p.av, pos = av.position;
+      // 나와 다른 곳(집 안 / 마당)에 있는 친구는 안 보이게
+      if (p.inside !== this.getInside()) { av.root.visible = false; p.tag.style.display = 'none'; p.jumpNext = true; return; }
+      if (p.jumpNext) { av.restore({ x: p.tx, z: p.tz, facing: p.f }); av.target = null; p.jumpNext = false; }
+      av.root.visible = true;
       const d = Math.hypot(p.tx - pos.x, p.tz - pos.z);
       if (d > 8) { av.restore({ x: p.tx, z: p.tz, facing: p.f }); av.target = null; }
       else if (d > 0.1) { av.moveTo(p.tx, p.tz); av.running = p.r || d > 2.5; }

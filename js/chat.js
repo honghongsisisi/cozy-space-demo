@@ -119,7 +119,7 @@ export class Chat {
     this.bubbles.forEach((b, id) => {
       if (now > b.until) { b.el.classList.add('gone'); return; }
       const p = this.getSpeaker(id);
-      if (!p) return;
+      if (!p) { b.el.style.display = 'none'; return; } // 다른 곳(집 안/마당)에 있는 친구의 말풍선은 숨김 (기록 창에는 남음)
       const v = p.clone().project(this.camera);
       const behind = v.z > 1;
       b.el.style.display = behind ? 'none' : '';
