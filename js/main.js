@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.31';
-import { Avatar } from './avatar.js?v=0.31';
-import { Environment } from './environment.js?v=0.31';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.31';
-import { saveState, loadState } from './storage.js?v=0.31';
-import { Sound } from './sound.js?v=0.31';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.31';
-import { fmt } from './realtime.js?v=0.31';
-import { icon, fillIcons } from './icons.js?v=0.31';
-import { makeThumbnails } from './thumbs.js?v=0.31';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.31';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.32';
+import { Avatar } from './avatar.js?v=0.32';
+import { Environment } from './environment.js?v=0.32';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.32';
+import { saveState, loadState } from './storage.js?v=0.32';
+import { Sound } from './sound.js?v=0.32';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.32';
+import { fmt } from './realtime.js?v=0.32';
+import { icon, fillIcons } from './icons.js?v=0.32';
+import { makeThumbnails } from './thumbs.js?v=0.32';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.32';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1021,7 +1021,7 @@ function moveTo(dest) {
       toast(dest === 'plaza' ? '광장에 왔어요' : '우리 집에 왔어요');
     }, 380);
   };
-  if (dest === 'plaza') askName('광장에 가요', go); else go();
+  go(); // 광장도 이름을 묻지 않고 바로 (이름을 안 적었으면 '나그네'로 보여요. 친구 창에서 언제든 바꿀 수 있어요)
 }
 goBtn.addEventListener('click', () => moveTo(space === 'plaza' ? 'home' : 'plaza'));
 document.getElementById('btn-home').addEventListener('click', (e) => { e.preventDefault(); moveTo('home'); });
@@ -1205,6 +1205,25 @@ function frame() {
 }
 frame();
 document.getElementById('loading').classList.add('done');
+
+// ---------- 새 버전 확인 ----------
+// 휴대폰 브라우저는 예전 화면을 오래 기억해 두는 일이 많아요. 그래서 켤 때 한 번, 그리고 다시 화면으로 돌아올 때
+// 서버의 최신 버전 번호를 (기억해 둔 것 말고) 새로 받아 보고, 지금 것보다 새것이면 한 번만 새로 고쳐요.
+const MY_VERSION = (document.querySelector('.version') || {}).textContent || '';
+function checkNewVersion() {
+  fetch(`${location.pathname}?vc=${Date.now()}`, { cache: 'no-store' }).then((r) => r.text()).then((html) => {
+    const m = html.match(/class="version"[^>]*>(v[\d.]+)</);
+    if (!m || m[1] === MY_VERSION) return;
+    let tried = '';
+    try { tried = sessionStorage.getItem('cozy-reloaded-for') || ''; } catch (e) { /* 무시 */ }
+    if (tried === m[1]) return; // 같은 버전 때문에 계속 새로 고치지 않게
+    try { sessionStorage.setItem('cozy-reloaded-for', m[1]); } catch (e) { /* 무시 */ }
+    saveNow(false);
+    location.reload();
+  }).catch(() => {});
+}
+setTimeout(checkNewVersion, 1500);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewVersion(); });
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
 window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; }, get inside() { return inside; }, goThroughDoor };
