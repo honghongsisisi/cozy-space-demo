@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.38';
-import { PALETTE as P } from './palette.js?v=0.38';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.39';
+import { PALETTE as P } from './palette.js?v=0.39';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
@@ -274,8 +274,9 @@ export class World {
       [[32, 32], [96, 96]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); });
     }, len / 1.4, H / 1.4) });
     // 창문 유리는 바깥 하늘빛을 받아요 (환경에서 색을 바꿈)
-    this.windowMat = new THREE.MeshBasicMaterial({ color: 0xd8ecf8 });
-    const addWindow = (wall, list, x, w = 1.5, h = 1.3, y = 1.85) => {
+    this.windowMat = new THREE.MeshBasicMaterial({ color: 0xd8ecf8, transparent: true, opacity: 0.16, depthWrite: false }); // 거의 투명한 유리
+    const WIN = { w: 1.5, h: 1.3, y: 1.85 };
+    const addWindow = (wall, list, x, w = WIN.w, h = WIN.h, y = WIN.y) => {
       const g = new THREE.Group();
       const fr = mat(P.sage);
       const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.windowMat);
@@ -302,8 +303,26 @@ export class World {
         ? [[-(len / 2 + opts.gap / 2) / 2, len / 2 - opts.gap / 2], [(len / 2 + opts.gap / 2) / 2, len / 2 - opts.gap / 2]]
         : [[0, len]];
       pieces.forEach(([cx, pl]) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(pl, H, T), [mat(P.houseWall), mat(P.houseWall), mat(P.wood), mat(P.houseWall), paper(pl), mat(P.houseWall)]);
-        m.position.set(cx, H / 2, 0); m.receiveShadow = true;
+        let m;
+        if (opts.windows && !opts.gap) {
+          // 창문 자리는 실제로 뚫어서 바깥 풍경이 보여요
+          const sh = new THREE.Shape();
+          sh.moveTo(-pl / 2, 0); sh.lineTo(pl / 2, 0); sh.lineTo(pl / 2, H); sh.lineTo(-pl / 2, H); sh.lineTo(-pl / 2, 0);
+          opts.windows.forEach((x) => {
+            const hole = new THREE.Path();
+            hole.moveTo(x - WIN.w / 2, WIN.y - WIN.h / 2); hole.lineTo(x - WIN.w / 2, WIN.y + WIN.h / 2);
+            hole.lineTo(x + WIN.w / 2, WIN.y + WIN.h / 2); hole.lineTo(x + WIN.w / 2, WIN.y - WIN.h / 2);
+            hole.lineTo(x - WIN.w / 2, WIN.y - WIN.h / 2);
+            sh.holes.push(hole);
+          });
+          const pm = paper(pl); pm.map.repeat.set(1 / 1.4, 1 / 1.4); // 뚫린 벽은 좌표가 미터 단위
+          m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false }), [pm, mat(P.houseWall)]);
+          m.position.set(cx, 0, -T / 2);
+        } else {
+          m = new THREE.Mesh(new THREE.BoxGeometry(pl, H, T), [mat(P.houseWall), mat(P.houseWall), mat(P.wood), mat(P.houseWall), paper(pl), mat(P.houseWall)]);
+          m.position.set(cx, H / 2, 0);
+        }
+        m.receiveShadow = true;
         body.add(m);
         const wain = new THREE.Mesh(new THREE.BoxGeometry(pl, 0.95, 0.06), mat(P.wainscot)); // 벽 아래 나무 판
         wain.position.set(cx, 0.475, T / 2 + 0.03); body.add(wain);
@@ -447,12 +466,8 @@ export class World {
       w.userData.windows.forEach((g) => { g.visible = cur > 0.7; });
     });
     this.roomDoor.visible = this.walls[3].userData.cut > 0.7; // 낮아진 쪽 문틀은 숨겨서 문 자리는 평평하게
-    // 지붕: 들어오면 사라지고, 나갈 때 다시 덮임
-    const wantRoof = this.closing ? 1 : 0;
-    this.roofOpacity += Math.sign(wantRoof - this.roofOpacity) * Math.min(Math.abs(wantRoof - this.roofOpacity), dt * 5); // 0.2초쯤
-    this.roofMat.opacity = this.roofOpacity;
-    this.roof.visible = this.roofOpacity > 0.01;
-    this.roofMat.depthWrite = this.roofOpacity > 0.98;
+    // 지붕: 집 안에서는 처음부터 안 보여요 (사라지는 모션 없이 바로)
+    this.roof.visible = false;
     // 모서리 기둥: 붙은 두 벽 중 하나라도 낮아지면 같이 낮춤
     this.corners.forEach((p) => {
       const [sx, sz] = p.userData.corner;

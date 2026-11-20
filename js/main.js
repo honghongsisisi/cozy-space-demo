@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.38';
-import { Avatar } from './avatar.js?v=0.38';
-import { Environment } from './environment.js?v=0.38';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.38';
-import { saveState, loadState } from './storage.js?v=0.38';
-import { Sound } from './sound.js?v=0.38';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.38';
-import { fmt } from './realtime.js?v=0.38';
-import { icon, fillIcons } from './icons.js?v=0.38';
-import { makeThumbnails } from './thumbs.js?v=0.38';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.38';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.39';
+import { Avatar } from './avatar.js?v=0.39';
+import { Environment } from './environment.js?v=0.39';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.39';
+import { saveState, loadState } from './storage.js?v=0.39';
+import { Sound } from './sound.js?v=0.39';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.39';
+import { fmt } from './realtime.js?v=0.39';
+import { icon, fillIcons } from './icons.js?v=0.39';
+import { makeThumbnails } from './thumbs.js?v=0.39';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.39';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1160,7 +1160,7 @@ function checkDoors() {
   if (space === 'plaza' || moving) return;
   const p = avatar.position;
   if (inside) {
-    // 문 밖으로 나가면 지붕을 다시 덮고, 다 덮이면 마당으로
+    // 문 밖으로 몇 걸음 나가면 바로 마당으로
     const outside = p.z > ROOM_D / 2 + 0.35;
     if (!leaving && outside && doorArmed) {
       leaving = true; world.closing = true;
@@ -1168,14 +1168,15 @@ function checkDoors() {
     }
     if (leaving && !outside) { leaving = false; world.closing = false; } // 다시 들어오면 그대로 집 안
     if (!outside) doorArmed = true;
-    if (leaving && world.roofOpacity >= 0.99 && p.z > ROOM_D / 2 + 0.7) finishExit();
-    return;
+    if (leaving && p.z > ROOM_D / 2 + 0.7) { finishExit(); return true; } // 문 밖 몇 걸음이면 바로 마당 (지붕 모션 없이)
+    return false;
   }
   if (placing) return;
   let near = Infinity, hit = null;
   world.doors().forEach((d) => { const dd = Math.hypot(p.x - d.x, p.z - d.z); if (dd < near) { near = dd; hit = d; } });
   if (!doorArmed) { if (near > 1.3) doorArmed = true; return; }
-  if (hit && near < 0.55) enterHouse(hit);
+  if (hit && near < 0.55) { enterHouse(hit); return inside; }
+  return false;
 }
 
 // ---------- 모션 ----------
@@ -1218,7 +1219,7 @@ function frame() {
     if (mi.x || mi.y) route.length = 0;
     else if (!avatar.target) { const q = route.shift(); avatar.moveTo(q.x, q.z); }
   }
-  checkDoors();
+  if (checkDoors()) { updateCamera(0); world.updateWalls(0, camera.position); } // 들어가고 나온 그 순간에도 카메라·벽을 바로 맞춰서 한 프레임 튀는 것(지직) 없게
   env.update(dt, avatar.position);
   if (env.flowing) refreshEnvButtons();
   if (marker.visible) {
