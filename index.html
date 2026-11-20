@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.30">
+  <link rel="stylesheet" href="style.css?v=0.31">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -56,6 +56,7 @@
 
     <div class="room-nav">
       <button class="btn soon" data-soon="추천하기"><i data-icon="heart"></i>추천 0</button>
+      <button id="btn-go-home" class="btn btn-go hidden" title="내 섬으로 돌아가요"><i data-icon="home"></i><span>우리 집 가기</span></button>
       <button id="btn-go" class="btn btn-go" title="누구나 모이는 광장으로 가요"><i data-icon="plaza"></i><span>광장 가기</span></button>
       <button class="btn soon" data-soon="아무 섬 구경하기"><i data-icon="dice"></i>아무 섬</button>
     </div>
@@ -224,7 +225,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.30</span>
+      <span class="version" title="지금 보고 있는 버전">v0.31</span>
     </nav>
   </div>
 
@@ -280,6 +281,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.30"></script>
+<script type="module" src="js/main.js?v=0.31"></script>
 </body>
 </html>
