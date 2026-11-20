@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.39';
-import { glowMat, fireMat } from './catalog.js?v=0.39';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.39';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.40';
+import { glowMat, fireMat } from './catalog.js?v=0.40';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.40';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -281,7 +281,6 @@ export class Environment {
     this.hemi.intensity = ambI;
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.6);
     this.hemi.groundColor.setHex(0x9fbf88).lerp(bottom, 0.3);
-    if (this.indoor) this.hemi.groundColor.setHex(0xd9bf9e); // 집 안: 마루에서 올라오는 따뜻한 반사빛
 
     // 해(낮)·달(밤) 방향: 그림자가 너무 길어지지 않게 높이를 제한
     const ang = ((this.time - 6) / 12) * Math.PI;

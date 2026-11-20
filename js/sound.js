@@ -116,7 +116,7 @@ export class Sound {
     }
     if (on && !this.chimeLoading) {
       this.chimeLoading = true;
-      fetch('sounds/wind-chime.mp3?v=0.39').then((r) => r.arrayBuffer()).then((b) => this.ctx.decodeAudioData(b)).then((buf) => {
+      fetch('sounds/wind-chime.mp3?v=0.40').then((r) => r.arrayBuffer()).then((b) => this.ctx.decodeAudioData(b)).then((buf) => {
         const src = this.ctx.createBufferSource();
         src.buffer = buf; src.loop = true;
         src.loopStart = 0.06; src.loopEnd = buf.duration - 0.06; // mp3 앞뒤의 아주 짧은 빈칸은 건너뜀
