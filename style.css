@@ -384,7 +384,8 @@ body[data-space="plaza"] .room-title-input, body[data-space="plaza"] #btn-title-
 @media (max-width: 900px) {
   .topbar .room-nav { display: flex; margin-left: auto; order: 1; } /* 섬 이름 줄 오른쪽 끝에 */
   .topbar .room-info { order: 0; } .topbar .toolbar { order: 2; } .topbar .env-panel { order: 3; }
-  .room-nav > :not(.btn-go) { display: none; }
+  .room-nav > :not(.btn-go):not(.btn-ghost-join) { display: none; }
+  body.ghost .room-nav .btn-ghost-join { padding: 4px 9px; font-size: 12.5px; }
   .room-nav .btn-go.hidden { display: none; }
   .room-nav .btn-go { padding: 4px 9px; font-size: 12.5px; }
 }
@@ -395,3 +396,35 @@ body[data-space="plaza"] .room-title-input, body[data-space="plaza"] #btn-title-
 .item-card > span:not(.stock) { padding-bottom: 6px; }
 .item-card.full { opacity: 0.42; cursor: not-allowed; }
 .item-card.full:hover { border-color: var(--line); }
+
+/* ---------- 로그인 첫 화면 (v0.41) ---------- */
+.auth-overlay { background: rgba(70, 58, 52, 0.28); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); z-index: 40; }
+.auth-card { position: relative; max-width: 380px; padding: 24px 24px 18px; user-select: text; -webkit-user-select: text; }
+.auth-brand { display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--ink); }
+.auth-brand .ico { width: 24px; height: 24px; color: var(--accent); }
+.auth-sub { margin: 6px 0 16px; font-size: 13px; color: var(--muted); }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--card-2); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+.auth-tabs button { border: none; background: transparent; padding: 8px 6px; border-radius: 9px; font-size: 13.5px; color: var(--muted); }
+.auth-tabs button.on { background: #fff; color: var(--ink); font-weight: 700; box-shadow: 0 1px 4px rgba(70, 55, 110, 0.08); }
+.auth-form { display: grid; gap: 10px; }
+.auth-field { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.auth-field input { width: 100%; font-size: 15px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
+.auth-field input:focus { outline: none; border-color: var(--accent); }
+.auth-msg { margin: 0; font-size: 13px; line-height: 1.5; color: var(--danger); }
+.auth-msg.ok { color: #5f7f5c; }
+.auth-main { justify-content: center; width: 100%; margin-top: 2px; }
+.auth-main:disabled { opacity: 0.6; cursor: wait; }
+.auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--muted); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-ghost { justify-content: center; width: 100%; }
+.auth-note { margin: 8px 2px 0; font-size: 12px; line-height: 1.5; color: var(--muted); text-align: center; }
+.auth-close { position: absolute; top: 12px; right: 12px; border: none; background: transparent; color: var(--muted); padding: 4px; border-radius: 8px; }
+.auth-close:hover { background: var(--accent-soft); }
+
+/* 유령 손님일 때만 보이는 것 / 안 보이는 것 */
+.ghost-only { display: none !important; }
+body.ghost .ghost-only { display: inline-flex !important; }
+body.ghost #btn-save, body.ghost #btn-title-edit, body.ghost #invite-card, body.ghost .account-card, body.ghost #btn-reset { display: none !important; }
+.btn-ghost-join { font-weight: 700; color: #7a6a4f; background: #f6efe1; border-color: #eadfca; }
+.btn-ghost-join .ico { color: #a08a62; }
+body.ghost .chat-input:disabled { background: #f4f1ec; color: var(--muted); }

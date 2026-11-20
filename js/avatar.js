@@ -1,8 +1,8 @@
 // 머리 큰 귀여운 아바타와 걷기·점프·인사 움직임
 import * as THREE from 'three';
-import { mat } from './catalog.js?v=0.40';
-import { PALETTE as P } from './palette.js?v=0.40';
-import { PLOT_RADIUS } from './world.js?v=0.40';
+import { mat } from './catalog.js?v=0.41';
+import { PALETTE as P } from './palette.js?v=0.41';
+import { PLOT_RADIUS } from './world.js?v=0.41';
 
 const SPEED = 4.2;     // 걷기 속도
 const RUN_SPEED = 8.4; // 달리기 속도 (걷기의 2배)
@@ -155,11 +155,56 @@ export class Avatar {
 
   get position() { return this.root.position; }
 
+  // 유령 모습 (가입하지 않은 손님, v0.41): 사람 몸은 숨기고, 둥근 천을 쓴 작은 유령이 둥둥 떠다녀요.
+  // 반짝이거나 빛나지 않게, 크림색에 살짝 비치는 정도로만.
+  setGhost(on) {
+    this.isGhost = !!on;
+    if (on && !this.ghost) {
+      const g = new THREE.Group();
+      const cloth = new THREE.MeshLambertMaterial({ color: 0xf6efe4, emissive: 0xf6efe4, emissiveIntensity: 0.35, transparent: true, opacity: 0.82, depthWrite: false });
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), cloth);
+      head.position.y = 1.25;
+      // 아래로 살짝 넓어지는 천 + 물결 치는 끝자락
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.62, 28, 1, true), cloth);
+      skirt.position.y = 0.94;
+      g.add(head, skirt);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const w = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), cloth);
+        w.scale.set(1, 0.75, 1);
+        w.position.set(Math.sin(a) * 0.44, 0.64, Math.cos(a) * 0.44);
+        g.add(w);
+      }
+      const eyeM = new THREE.MeshBasicMaterial({ color: 0x5a4636 });
+      [-1, 1].forEach((sx) => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), eyeM);
+        e.scale.set(0.85, 1.15, 0.5);
+        e.position.set(sx * 0.13, 1.33, 0.385);
+        g.add(e);
+        const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.045, 16), new THREE.MeshBasicMaterial({ color: P.cheek, transparent: true, opacity: 0.45 }));
+        cheek.position.set(sx * 0.22, 1.24, 0.36); cheek.rotation.y = sx * 0.55;
+        g.add(cheek);
+      });
+      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 4, 12, Math.PI), eyeM);
+      mouth.rotation.z = Math.PI; mouth.position.set(0, 1.22, 0.405);
+      g.add(mouth);
+      this.ghost = g;
+      this.root.add(g);
+    }
+    if (this.ghost) this.ghost.visible = !!on;
+    this.body.visible = !on;
+  }
+
   moveTo(x, z) { this.target = new THREE.Vector2(x, z); }
   jump() { if (this.y <= 0.001) this.vy = 5.2; }
   wave() { this.waveT = 1.6; }
 
   update(dt, input, cameraYaw, colliders) {
+    this.step(dt, input, cameraYaw, colliders);
+    this.updateGhost(dt);
+  }
+
+  step(dt, input, cameraYaw, colliders) {
     const p = this.root.position;
     let dx = 0, dz = 0;
 
@@ -285,6 +330,15 @@ export class Avatar {
       this.armR.rotation.z = lerp(this.armR.rotation.z, 0.07 + Math.abs(s1) * 0.04 * wb - Math.sin(t * 1.9) * 0.01 * idle, sm(10));
       this.elbowR.rotation.x = lerp(this.elbowR.rotation.x, elbow, sm(10));
     }
+  }
+
+  // 유령: 땅에서 조금 떠서 천천히 오르내리고, 움직일 땐 진행 방향으로 살짝 기울어요
+  updateGhost(dt) {
+    if (!this.isGhost || !this.ghost) return;
+    const t = performance.now() / 1000;
+    this.ghost.position.y = this.y + 0.25 + Math.sin(t * 1.8) * 0.07;
+    this.ghost.rotation.x = lerp(this.ghost.rotation.x, this.moving ? 0.12 : 0, 1 - Math.exp(-dt * 5));
+    this.ghost.rotation.z = Math.sin(t * 1.1) * 0.04 + (this.waveT > 0 ? Math.sin(this.waveT * 9) * 0.22 : 0); // 인사: 몸을 좌우로 흔들흔들
   }
 
   serialize() {

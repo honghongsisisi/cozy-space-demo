@@ -1,16 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.40';
-import { Avatar } from './avatar.js?v=0.40';
-import { Environment } from './environment.js?v=0.40';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.40';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.40';
-import { saveState, loadState } from './storage.js?v=0.40';
-import { Sound } from './sound.js?v=0.40';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.40';
-import { fmt } from './realtime.js?v=0.40';
-import { icon, fillIcons } from './icons.js?v=0.40';
-import { makeThumbnails } from './thumbs.js?v=0.40';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.40';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.41';
+import { Avatar } from './avatar.js?v=0.41';
+import { Environment } from './environment.js?v=0.41';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.41';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.41';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.41';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland } from './auth.js?v=0.41';
+import { Sound } from './sound.js?v=0.41';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.41';
+import { fmt } from './realtime.js?v=0.41';
+import { icon, fillIcons } from './icons.js?v=0.41';
+import { makeThumbnails } from './thumbs.js?v=0.41';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.41';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -72,10 +73,13 @@ let viewShift = 0, viewShiftY = 0;
 
 // ---------- 내 섬인지, 친구 섬에 놀러 왔는지 ----------
 // 초대 링크는 주소 끝에 ?visit=섬번호 가 붙어 있어요. 내 섬 번호가 아니면 '손님'으로 들어가요.
-const MY_ROOM = myRoomId();
+// v0.41: 섬 번호는 내 계정에서 만들어져서, 어느 컴퓨터·휴대폰에서 로그인해도 같아요.
+let MY_ROOM = '';
 const visitId = (new URLSearchParams(location.search).get('visit') || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
-const IS_GUEST = !!visitId && visitId !== MY_ROOM;
-let space = IS_GUEST ? 'visit' : 'home'; // 지금 있는 곳: home(내 섬) / visit(친구 섬) / plaza(광장)
+// 로그인 창이 떠 있는 동안에는 광장을 뒤에 배경으로 보여 줘요 (아직 아무것도 저장하지 않음)
+let space = 'plaza'; // 지금 있는 곳: home(내 섬) / visit(친구 섬) / plaza(광장)
+let account = null;  // 로그인한 사람 { id, email, nickname }
+let ghost = false;   // 가입하지 않은 손님(유령)
 // 집 안에 있는지 (내 섬·친구 섬 모두)
 let inside = false;
 let houseItems = DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() })); // 마당에 있는 동안 집 안 물건
@@ -99,11 +103,50 @@ function currentState() {
   };
 }
 function saveNow(showToast) {
+  if (ghost || !account) return; // 유령 손님은 저장할 섬이 없어요
   // 친구 섬·광장을 내 섬에 덮어쓰지 않게, 내 섬에 있을 때만 저장
   if (space !== 'home') { if (showToast) toast(space === 'plaza' ? '광장은 저장되지 않아요. 내 섬은 그대로예요' : '친구 섬은 저장되지 않아요. 내 섬은 그대로예요'); return; }
-  const ok = saveState(currentState());
-  if (showToast) toast(ok ? '저장했어요' : '이 브라우저에서는 저장할 수 없어요');
+  const packed = packState(currentState());
+  const ok = saveState(packed, userKey(account.id)); // ① 이 컴퓨터에 바로 (빠른 임시 보관)
+  queueCloud(packed);                                 // ② 서버에는 잠깐 모았다가 한 번에 (진짜 보관)
+  if (showToast) toast(ok || !cloudOff ? '저장했어요' : '이 브라우저에서는 저장할 수 없어요');
 }
+// ---- 서버에 저장 (v0.41) ----
+// 원리: 물건을 옮길 때마다 서버에 보내면 너무 잦아서, 1.5초 동안 모았다가 마지막 모습만 보내요.
+// 창을 닫거나 다른 창으로 넘어갈 때는 기다리지 않고 바로 보내요.
+let cloudPending = null, cloudTimer = null, cloudBusy = false, cloudOff = false, cloudWarned = false;
+function queueCloud(packed, now = false) {
+  if (!account || cloudOff) return;
+  cloudPending = packed;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(flushCloud, now ? 0 : 1500);
+}
+async function flushCloud() {
+  clearTimeout(cloudTimer);
+  if (!account || !cloudPending || cloudOff) return;
+  if (cloudBusy) { cloudTimer = setTimeout(flushCloud, 500); return; }
+  const p = cloudPending, uid = account.id;
+  cloudPending = null; cloudBusy = true;
+  try {
+    await saveIsland(uid, myName, p);
+    if (cloudWarned) { cloudWarned = false; toast('서버에 다시 저장했어요'); }
+  } catch (e) {
+    if (e && e.missing) { cloudOff = true; toast('서버 저장소가 아직 준비 중이라, 이 컴퓨터에만 저장해 둘게요'); refreshSaveLabel(); }
+    else {
+      if (!cloudPending) cloudPending = p;
+      if (!cloudWarned) { cloudWarned = true; toast('서버에 저장하지 못했어요. 이 컴퓨터엔 저장해 두었고, 곧 다시 해 볼게요'); }
+      cloudTimer = setTimeout(flushCloud, 10000);
+    }
+  }
+  cloudBusy = false;
+}
+function refreshSaveLabel() {
+  const el = document.getElementById('space-save');
+  if (el) el.textContent = cloudOff ? '이 컴퓨터에만 저장 (서버 준비 중)' : '내 계정에 자동 저장';
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { if (space === 'home') saveNow(false); flushCloud(); }
+});
 function scheduleSave() {
   if (party) party.worldChanged(); // 친구가 와 있으면 바뀐 섬 모습을 보내 줌
   clearTimeout(saveTimer);
@@ -114,7 +157,7 @@ world.onChange(scheduleSave);
 let roomTitle = '나의 작은 섬';
 // 내 섬 불러오기 (처음 열 때, 그리고 광장·친구 섬에서 돌아올 때)
 function loadHome() {
-  const saved = loadState();
+  const saved = account ? loadState(userKey(account.id)) : null; // 로그인할 때 서버와 맞춰 둔 내 섬
   roomTitle = '나의 작은 섬';
   restoreOwned(saved && saved.inventory && saved.inventory.owned);
   houseItems = saved && saved.house ? saved.house.items.map((i) => ({ ...i, ...clampToRoom(i.x, i.z, 0.3) })) : DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
@@ -130,14 +173,16 @@ function loadHome() {
     avatar.restore({ x: 0, z: 3, facing: 0 });
   }
 }
-if (IS_GUEST) {
-  // 친구 섬: 주인이 섬 모습을 보내 줄 때까지 빈 섬으로 기다림. 시작 자리는 앞쪽 산책길 근처 아무 데나
-  roomTitle = '친구의 섬';
-  world.apply({ type: 'replaceAll', items: [] }, { silent: true });
-  avatar.restore({ x: (Math.random() - 0.5) * 3, z: 3 + Math.random() * 2, facing: 0 });
-} else loadHome();
+// 광장 모습 (로그인 창 뒤 배경, 그리고 광장에 갈 때)
+function showPlaza() {
+  roomTitle = '광장';
+  world.apply({ type: 'replaceAll', items: PLAZA_ITEMS }, { silent: true });
+  env.restore({ time: 13, weather: 'clear', realTime: true, flowing: false }); // 광장은 한국 실제 시간, 맑음
+  avatar.restore({ x: (Math.random() - 0.5) * 2.4, z: 9.5 + Math.random() * 1.5, facing: Math.PI });
+}
+showPlaza();
 cam.target.copy(avatar.position).add(new THREE.Vector3(0, 1.3, 0));
-window.addEventListener('beforeunload', () => saveNow(false));
+window.addEventListener('beforeunload', () => { saveNow(false); flushCloud(); });
 
 // ---------- 키보드 ----------
 const keys = new Set();
@@ -386,7 +431,7 @@ btnUndo.addEventListener('click', undo);
 btnRedo.addEventListener('click', redo);
 refreshHistory();
 
-let role = IS_GUEST ? 'guest' : 'owner'; // 주인(owner) / 손님(guest). 아래 '주인 / 손님' 부분 참고
+let role = 'guest'; // 주인(owner) / 손님(guest). 아래 '주인 / 손님' 부분 참고. 로그인해서 내 섬에 가면 주인
 
 // ---------- 꾸미기 ----------
 const drawerHint = document.getElementById('drawer-hint');
@@ -720,7 +765,7 @@ document.getElementById('btn-save').addEventListener('click', () => saveNow(true
 
 // 소리
 const sound = new Sound();
-avatar.onStep = () => sound.footstep();
+avatar.onStep = () => { if (!avatar.isGhost) sound.footstep(); }; // 유령은 발소리가 없어요
 const btnSound = document.getElementById('btn-sound');
 const btnSound2 = document.getElementById('btn-sound2');
 function refreshSoundBtn() {
@@ -757,7 +802,8 @@ document.getElementById('btn-help-close').addEventListener('click', () => {
   help.classList.add('hidden');
   try { localStorage.setItem('cozy-space-demo:helped', '1'); } catch (e) { /* 무시 */ }
 });
-try { if (space === 'home' && !localStorage.getItem('cozy-space-demo:helped')) help.classList.remove('hidden'); } catch (e) { help.classList.remove('hidden'); }
+// 조작법은 처음 내 섬에 왔을 때 한 번 보여 줘요 (아래 enterAccount)
+function maybeHelp() { try { if (!localStorage.getItem('cozy-space-demo:helped')) help.classList.remove('hidden'); } catch (e) { help.classList.remove('hidden'); } }
 
 const toastEl = document.getElementById('toast');
 let toastTimer = null;
@@ -917,11 +963,12 @@ const inviteInput = document.getElementById('invite-link');
 const fadeEl = document.getElementById('fade');
 const goBtn = document.getElementById('btn-go');
 const inviteLink = () => `${location.origin}${location.pathname}?visit=${MY_ROOM}`;
-const nameOr = () => myName || (space === 'visit' ? '손님' : space === 'plaza' ? '나그네' : '섬 주인');
+const nameOr = () => (ghost ? '유령' : myName || (space === 'visit' ? '손님' : space === 'plaza' ? '나그네' : '섬 주인'));
 
 // 채팅: 내 화면에 뜨는 건 그대로, 같은 공간 사람들에게도 보내기
 const localSend = chat.transport.send.bind(chat.transport);
 chat.transport.send = (msg) => {
+  if (ghost) return; // 유령은 말할 수 없어요
   localSend(msg);
   if (party) party.sendChat(msg);
   if (/안녕/.test(msg.text)) doWave(); // "안녕"이라고 말하면 손 흔들기 (친구 화면에도)
@@ -944,7 +991,7 @@ function startParty() {
   if (party || !netConfigured()) return;
   const partyRole = space === 'home' ? 'owner' : space === 'visit' ? 'guest' : 'visitor';
   party = new Party({
-    scene, camera, viewport, avatar, chat, toast, role: partyRole,
+    scene, camera, viewport, avatar, chat, toast, role: partyRole, ghost,
     roomId: space === 'home' ? MY_ROOM : space === 'visit' ? visitId : 'plaza',
     getName: nameOr,
     getWorld: () => ({ title: roomTitle, items: yardList(), house: houseList(), env: env.serialize() }),
@@ -971,7 +1018,7 @@ function startParty() {
 }
 function stopParty() {
   if (party) { party.dispose(); party = null; }
-  renderPeople([{ name: nameOr(), role: space === 'home' ? 'owner' : 'guest', me: true }]);
+  renderPeople([{ name: nameOr(), role: space === 'home' ? 'owner' : 'guest', me: true, ghost }]);
 }
 
 // 지금 있는 곳에 맞춰 화면 고치기 (친구 창 안내, 위쪽 이동 버튼)
@@ -980,6 +1027,7 @@ function refreshSpaceUI() {
   document.getElementById('plaza-card').classList.toggle('hidden', space !== 'plaza');
   goBtn.innerHTML = space === 'plaza' ? `${icon('home')}<span>우리 집 가기</span>` : `${icon('plaza')}<span>광장 가기</span>`;
   goBtn.title = space === 'plaza' ? '내 섬으로 돌아가요' : '누구나 모이는 광장으로 가요';
+  goBtn.classList.toggle('hidden', ghost && space === 'plaza'); // 유령은 돌아갈 섬이 없어서, 대신 '가입하고 내 섬 받기' 버튼이 보여요
   resetLabel.textContent = resetName();
   document.body.dataset.space = space;
 }
@@ -1026,6 +1074,7 @@ document.getElementById('btn-join-cancel').addEventListener('click', () => {
 let moving = false;
 function moveTo(dest) {
   if (moving || dest === space) return;
+  if (dest === 'home' && ghost) { openAuth('signup', '가입하면 바로 내 섬이 생겨요. 꾸민 섬은 계정에 저장돼요', true); return; }
   if (dest === 'plaza' && !netConfigured()) { toast('광장은 서버 연결을 마친 뒤에 열려요'); return; }
   const go = () => {
     moving = true;
@@ -1039,14 +1088,10 @@ function moveTo(dest) {
       if (currentPane === 'furniture') openPanel(null);
       undoStack.length = 0; redoStack.length = 0;
       space = dest;
-      if (dest === 'plaza') {
-        roomTitle = '광장';
-        world.apply({ type: 'replaceAll', items: PLAZA_ITEMS }, { silent: true });
-        env.restore({ time: 13, weather: 'clear', realTime: true, flowing: false }); // 광장은 한국 실제 시간, 맑음
-        avatar.restore({ x: (Math.random() - 0.5) * 2.4, z: 9.5 + Math.random() * 1.5, facing: Math.PI });
-      } else {
+      if (dest === 'plaza') showPlaza();
+      else {
         loadHome();
-        if (location.search) history.replaceState(null, '', location.pathname); // 초대 링크 주소 지우기
+        clearVisitParam(); // 초대 링크 주소 지우기
       }
       avatar.target = null;
       setRole(dest === 'home' ? 'owner' : 'guest');
@@ -1064,13 +1109,26 @@ goBtn.addEventListener('click', () => moveTo(space === 'plaza' ? 'home' : 'plaza
 document.getElementById('btn-home').addEventListener('click', (e) => { e.preventDefault(); moveTo('home'); });
 
 refreshSpaceUI();
-if (space === 'visit') {
-  if (!netConfigured()) { document.getElementById('join-off').classList.remove('hidden'); document.getElementById('btn-join').disabled = true; }
-  askName('친구 섬에 놀러 가요', () => { joinedAt = performance.now(); startParty(); }, true);
-} else {
+function clearVisitParam() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has('visit')) return;
+  q.delete('visit');
+  history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : ''));
+}
+// 친구 섬에 들어가기 (초대 링크로 왔을 때): 주인이 섬 모습을 보내 줄 때까지 빈 섬으로 기다림
+function enterVisit() {
+  space = 'visit';
+  roomTitle = '친구의 섬';
+  world.apply({ type: 'replaceAll', items: [] }, { silent: true });
+  avatar.restore({ x: (Math.random() - 0.5) * 3, z: 3 + Math.random() * 2, facing: 0 });
+  avatar.target = null;
+  cam.target.copy(avatar.position).add(new THREE.Vector3(0, 1.3, 0));
+  setRole('guest'); showTitle(); refreshEnvButtons(); refreshSpaceUI();
+  joinedAt = performance.now();
+  if (!netConfigured()) toast('아직 친구 섬과 연결할 수 없어요. 조금 뒤에 다시 열어 주세요');
   startParty();
 }
-inviteInput.value = inviteLink();
+inviteInput.value = '';
 if (!netConfigured()) {
   document.getElementById('net-off').classList.remove('hidden');
   document.getElementById('btn-invite').disabled = true;
@@ -1078,7 +1136,10 @@ if (!netConfigured()) {
 myNameInput.value = myName;
 myNameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') myNameInput.blur(); });
 myNameInput.addEventListener('change', () => {
-  myName = cleanName(myNameInput.value); myNameInput.value = myName; saveName(myName);
+  const n = cleanName(myNameInput.value);
+  if (!n) { myNameInput.value = myName; toast('별명을 적어 주세요'); return; }
+  myName = n; myNameInput.value = myName; saveName(myName);
+  if (account) { setNickname(myName); document.getElementById('acc-name').textContent = myName; if (space === 'home') saveNow(false); }
   if (party) { party.peopleChanged(); party.sendState(true); }
 });
 document.getElementById('btn-invite').addEventListener('click', () => {
@@ -1225,6 +1286,150 @@ btnMotion.addEventListener('click', () => {
   btnMotion.classList.toggle('on', !motionEl.classList.contains('hidden'));
 });
 
+// ---------- 로그인 · 가입 · 유령 손님 (v0.41) ----------
+// 처음 켜면: 예전에 로그인해 둔 적이 있으면 바로 내 섬으로, 아니면 로그인 창이 떠요 (뒤에는 광장이 보여요).
+// 손님으로 구경하기를 누르면 유령 모습으로 광장에서 시작해요. 유령은 걷기·점프·인사만 되고,
+// 말하기·꾸미기·저장은 안 돼요. 언제든 위쪽 '가입하고 내 섬 받기'로 가입할 수 있어요.
+const authEl = document.getElementById('auth');
+const authForm = document.getElementById('auth-form');
+const authEmail = document.getElementById('auth-email');
+const authPw = document.getElementById('auth-pw');
+const authNick = document.getElementById('auth-nick');
+const authMsg = document.getElementById('auth-msg');
+const authSubmit = document.getElementById('auth-submit');
+const authSub = document.getElementById('auth-sub');
+const AUTH_SUB = authSub.textContent;
+let authMode = 'login', authBusy = false;
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('on', mode === 'login');
+  document.getElementById('tab-signup').classList.toggle('on', mode === 'signup');
+  authEl.querySelectorAll('.signup-only').forEach((el) => el.classList.toggle('hidden', mode !== 'signup'));
+  authSubmit.textContent = mode === 'login' ? '로그인' : '가입하고 내 섬 받기';
+  authPw.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  showAuthMsg('');
+}
+function showAuthMsg(text, ok) {
+  authMsg.textContent = text;
+  authMsg.classList.toggle('ok', !!ok);
+  authMsg.classList.toggle('hidden', !text);
+}
+function openAuth(mode = 'login', sub = '', closable = false) {
+  setAuthMode(mode);
+  authSub.textContent = sub || (visitId ? '친구가 섬에 초대했어요. 로그인하거나 손님으로 들어가요' : AUTH_SUB);
+  document.getElementById('auth-close').classList.toggle('hidden', !closable);
+  // 이미 유령으로 놀고 있으면 '손님으로 구경하기'는 필요 없음
+  document.getElementById('auth-ghost').classList.toggle('hidden', ghost);
+  document.getElementById('auth-ghost-note').classList.toggle('hidden', ghost);
+  authEl.querySelector('.auth-or').classList.toggle('hidden', ghost);
+  authEl.classList.remove('hidden');
+  if (!isPhone()) setTimeout(() => authEmail.focus(), 60);
+}
+const closeAuth = () => authEl.classList.add('hidden');
+document.getElementById('tab-login').addEventListener('click', () => setAuthMode('login'));
+document.getElementById('tab-signup').addEventListener('click', () => setAuthMode('signup'));
+document.getElementById('auth-close').addEventListener('click', closeAuth);
+authEl.addEventListener('keydown', (e) => e.stopPropagation()); // 글자를 치는 동안 캐릭터·단축키가 움직이지 않게
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (authBusy) return;
+  const email = authEmail.value.trim(), pw = authPw.value, nick = cleanName(authNick.value);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAuthMsg('이메일 주소를 다시 확인해 주세요'); authEmail.focus(); return; }
+  if (pw.length < 6) { showAuthMsg('비밀번호는 6자 이상으로 적어 주세요'); authPw.focus(); return; }
+  if (authMode === 'signup' && !nick) { showAuthMsg('섬에서 보일 별명을 적어 주세요'); authNick.focus(); return; }
+  authBusy = true; authSubmit.disabled = true;
+  showAuthMsg(authMode === 'login' ? '로그인하고 있어요…' : '가입하고 있어요…', true);
+  const r = authMode === 'login' ? await signIn(email, pw) : await signUp(email, pw, nick);
+  authBusy = false; authSubmit.disabled = false;
+  if (r.error) { showAuthMsg(r.error); return; }
+  if (r.confirm) {
+    setAuthMode('login');
+    authEmail.value = email; authPw.value = '';
+    showAuthMsg('메일함에 가입 확인 메일을 보냈어요. 메일 속 링크를 누른 뒤, 여기서 로그인해 주세요', true);
+    return;
+  }
+  authPw.value = '';
+  // 유령으로 놀다가 가입했으면: 새로 열어서 깨끗하게 내 섬으로 (로그인은 브라우저가 기억해 둠)
+  if (ghost) { location.reload(); return; }
+  closeAuth();
+  enterAccount(r.user, authMode === 'signup');
+});
+
+document.getElementById('auth-ghost').addEventListener('click', () => { closeAuth(); enterGhost(); });
+document.getElementById('btn-ghost-join').addEventListener('click', () => openAuth('signup', '가입하면 바로 내 섬이 생기고, 친구와 이야기도 나눌 수 있어요', true));
+
+// 유령 손님으로 시작
+function enterGhost() {
+  ghost = true; account = null;
+  document.body.classList.add('ghost');
+  avatar.setGhost(true);
+  chatInput.disabled = true;
+  document.getElementById('chat-send').disabled = true;
+  chatInput.placeholder = isPhone() ? '유령은 말할 수 없어요' : '유령은 말할 수 없어요 · 가입하면 이야기할 수 있어요';
+  myNameInput.disabled = true;
+  if (visitId) { enterVisit(); toast('유령 모습으로 친구 섬에 구경 왔어요'); return; }
+  space = 'plaza';
+  setRole('guest'); showTitle(); refreshSpaceUI();
+  startParty();
+  toast('유령 모습으로 광장에 왔어요. 천천히 둘러보세요');
+}
+
+// 로그인한 사람으로 시작: 서버의 내 섬과 이 컴퓨터의 임시 보관 중 더 새것을 골라 열어요
+async function enterAccount(user, isNew) {
+  account = user; ghost = false;
+  document.body.classList.remove('ghost');
+  MY_ROOM = user.id.replace(/[^a-z0-9]/gi, '').slice(0, 16);
+  inviteInput.value = inviteLink();
+  myName = user.nickname || myName || user.email.split('@')[0].slice(0, 10);
+  fadeEl.classList.add('on');
+  document.getElementById('fade-text').textContent = '내 섬을 불러오고 있어요…';
+  let cloud = null, cloudErr = null;
+  try {
+    const row = await loadIsland(user.id);
+    if (row) { cloud = migrate(row.data); if (!user.nickname && row.nickname) myName = cleanName(row.nickname); }
+  } catch (e) { cloudErr = e || {}; if (cloudErr.missing) cloudOff = true; }
+  const local = loadState(userKey(user.id));
+  let pick = cloud && local ? ((local.savedAt || 0) > (cloud.savedAt || 0) ? local : cloud) : (cloud || local);
+  let moved = false;
+  // 처음 로그인: 서버에 섬이 없으면, 로그인 없던 때 이 컴퓨터에 꾸며 둔 섬을 내 계정으로 옮겨 줘요 (한 계정에만 한 번)
+  if (!pick && (!cloudErr || cloudErr.missing)) { pick = takeLegacy(user.id); moved = !!pick; }
+  if (pick) {
+    saveState(pick, userKey(user.id));
+    if (pick !== cloud) queueCloud(pick, true);
+  }
+  saveName(myName); myNameInput.value = myName;
+  document.getElementById('acc-name').textContent = myName;
+  document.getElementById('acc-email').textContent = user.email;
+  refreshSaveLabel();
+  if (visitId && visitId !== MY_ROOM) { fadeEl.classList.remove('on'); enterVisit(); return; }
+  clearVisitParam();
+  moveTo('home');
+  setTimeout(() => {
+    if (moved) toast('이 컴퓨터에 꾸며 둔 섬을 내 계정으로 옮겼어요');
+    else if (cloudOff) toast('서버 저장소가 아직 준비 중이라, 이 컴퓨터에만 저장해 둘게요');
+    else if (cloudErr) toast('서버에 연결하지 못해서, 이 컴퓨터에 있던 섬을 열었어요');
+    else if (isNew) toast(`${myName}님, 환영해요! 내 섬이 생겼어요`);
+    if (!pick && !cloud) saveNow(false); // 새 섬도 바로 계정에 한 번 저장
+  }, 900);
+  maybeHelp();
+}
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  saveNow(false);
+  await flushCloud();
+  await signOut();
+  location.href = location.pathname + (new URLSearchParams(location.search).has('localtest') ? '?localtest=1' : '');
+});
+
+// 켤 때: 로그인해 둔 적이 있는지 보기
+(async () => {
+  if (!authReady()) { openAuth('login', '지금은 서버에 연결할 수 없어요. 손님으로 구경할 수 있어요'); return; }
+  const u = await currentUser();
+  if (u) enterAccount(u); else openAuth('login');
+})();
+
 // ---------- 매 프레임 ----------
 const clock = new THREE.Clock();
 let realTick = 0;
@@ -1232,7 +1437,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (keys.has('q')) cam.yaw += dt * 1.8;
   if (keys.has('e')) cam.yaw -= dt * 1.8;
-  const typing = !help.classList.contains('hidden') || !joinEl.classList.contains('hidden');
+  const typing = !help.classList.contains('hidden') || !joinEl.classList.contains('hidden') || !authEl.classList.contains('hidden');
   avatar.update(dt, typing ? { x: 0, y: 0 } : moveInput(), cam.yaw, world.colliders());
   world.update(dt);
   updateCamera(dt);
