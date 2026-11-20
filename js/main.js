@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, snap, clampToPlot, newId } from './world.js?v=0.27';
-import { Avatar } from './avatar.js?v=0.27';
-import { Environment } from './environment.js?v=0.27';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.27';
-import { saveState, loadState } from './storage.js?v=0.27';
-import { Sound } from './sound.js?v=0.27';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.27';
-import { fmt } from './realtime.js?v=0.27';
-import { icon, fillIcons } from './icons.js?v=0.27';
-import { makeThumbnails } from './thumbs.js?v=0.27';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.27';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.28';
+import { Avatar } from './avatar.js?v=0.28';
+import { Environment } from './environment.js?v=0.28';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.28';
+import { saveState, loadState } from './storage.js?v=0.28';
+import { Sound } from './sound.js?v=0.28';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.28';
+import { fmt } from './realtime.js?v=0.28';
+import { icon, fillIcons } from './icons.js?v=0.28';
+import { makeThumbnails } from './thumbs.js?v=0.28';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.28';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -75,13 +75,26 @@ const MY_ROOM = myRoomId();
 const visitId = (new URLSearchParams(location.search).get('visit') || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
 const IS_GUEST = !!visitId && visitId !== MY_ROOM;
 let space = IS_GUEST ? 'visit' : 'home'; // 지금 있는 곳: home(내 섬) / visit(친구 섬) / plaza(광장)
+// 집 안에 있는지 (내 섬·친구 섬 모두). 집 안에 있는 동안 마당 모습은 yardItems에, 마당에 있는 동안 집 안 모습은 houseItems에 넣어 둠
+let inside = false;
+let yardItems = [], houseItems = DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
+let yardBack = null; // 집에서 나올 때 설 자리와 카메라 { avatar, cam }
+const clampPos = (x, z) => (inside ? clampToRoom(x, z) : clampToPlot(x, z));
 let myName = savedName();
 
 // ---------- 저장 ----------
 let saveTimer = null;
 let party = null; // 친구와 함께 (아래 '친구와 같은 섬에서' 부분)
 function currentState() {
-  return { title: roomTitle, items: world.serialize(), env: env.serialize(), avatar: avatar.serialize(), cam: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist } };
+  // 집 안에 있어도 마당과 집 안을 각각 제자리에 저장 (다시 열면 집 문 앞 마당에서 시작)
+  return {
+    title: roomTitle,
+    items: inside ? yardItems : world.serialize(),
+    house: { items: inside ? world.serialize() : houseItems },
+    env: env.serialize(),
+    avatar: inside && yardBack ? yardBack.avatar : avatar.serialize(),
+    cam: inside && yardBack ? yardBack.cam : { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist },
+  };
 }
 function saveNow(showToast) {
   // 친구 섬·광장을 내 섬에 덮어쓰지 않게, 내 섬에 있을 때만 저장
@@ -101,6 +114,7 @@ let roomTitle = '나의 작은 섬';
 function loadHome() {
   const saved = loadState();
   roomTitle = '나의 작은 섬';
+  houseItems = saved && saved.house ? saved.house.items : DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
   if (saved) {
     if (saved.title) roomTitle = saved.title;
     world.apply({ type: 'replaceAll', items: saved.items || [] }, { silent: true });
@@ -256,6 +270,22 @@ function pickItem(e) {
   return id;
 }
 
+function clickedDoor(e) {
+  if (space === 'plaza') return null;
+  setNdc(e);
+  if (inside) {
+    const hit = raycaster.intersectObject(world.roomDoor, true)[0];
+    return hit ? { x: ROOM_DOOR.x, z: ROOM_DOOR.z + 0.3 } : null;
+  }
+  const hit = raycaster.intersectObject(world.root, true)[0];
+  const id = hit ? world.findItemFromObject(hit.object) : null;
+  if (!id || !ITEM_BY_TYPE[world.items.get(id).data.type].door) return null;
+  const d = world.doors().find((x) => x.id === id);
+  if (!d) return null;
+  const a = d.rot * Math.PI / 180;
+  return { x: d.x - Math.sin(a) * 0.15, z: d.z - Math.cos(a) * 0.15 }; // 문 바로 앞 (조금 안쪽)
+}
+
 function handleClick(e) {
   if (placing) {
     updateGhost(e);
@@ -266,9 +296,17 @@ function handleClick(e) {
     select(pickItem(e));
     return;
   }
+  // 집(또는 집 안 문)을 누르면 문 앞으로 걸어가서 들어가요/나가요
+  const door = clickedDoor(e);
+  if (door) {
+    avatar.running = false;
+    avatar.moveTo(door.x, door.z);
+    marker.position.set(door.x, 0.03, door.z); marker.visible = true; markerT = 1;
+    return;
+  }
   const p = groundPoint(e);
   if (p) {
-    const c = clampToPlot(p.x, p.z);
+    const c = clampPos(p.x, p.z);
     // 땅을 빠르게 두 번 클릭하면 달려감
     const now = performance.now();
     avatar.running = now - lastClick.t < 350 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 40;
@@ -348,7 +386,7 @@ let lastShift = false;
 
 // 격자 켜기/끄기 (창 아래쪽 작은 스위치)
 const gridToggle = document.getElementById('grid-toggle');
-function refreshGridBtn() { gridToggle.checked = gridOn; world.grid.visible = decorating && gridOn; }
+function refreshGridBtn() { gridToggle.checked = gridOn; world.grid.visible = false; world.roomGrid.visible = false; world.activeGrid.visible = decorating && gridOn; }
 gridToggle.addEventListener('change', () => { gridOn = gridToggle.checked; refreshGridBtn(); });
 
 // 분류 폴더별로 물건 카드 만들기
@@ -439,7 +477,7 @@ function startPlacing(type, movingId = null, rot = 0) {
   folders.querySelectorAll('.item-card').forEach((c) => c.classList.toggle('on', c.dataset.type === type && !movingId));
   // 터치 화면에서는 마우스 따라다니기가 없으니 아바타 앞에 미리 보여 줌
   const fx = avatar.position.x + Math.sin(avatar.facing) * 1.5, fz = avatar.position.z + Math.cos(avatar.facing) * 1.5;
-  const c = clampToPlot(fx, fz);
+  const c = clampPos(fx, fz);
   placing.ghost.position.set(c.x, 0, c.z);
   placing.ghost.visible = true;
 }
@@ -459,7 +497,7 @@ function updateGhost(e) {
   const p = groundPoint(e);
   if (!p || !placing) return;
   // 기본은 어디든 자유롭게. Shift를 누르고 있을 때만 격자 칸에 맞춤
-  const c = e.shiftKey ? clampToPlot(snap(p.x), snap(p.z)) : clampToPlot(p.x, p.z);
+  const c = e.shiftKey ? clampPos(snap(p.x), snap(p.z)) : clampPos(p.x, p.z);
   placing.ghost.position.set(c.x, 0, c.z);
   placing.ghost.visible = true;
 }
@@ -528,6 +566,7 @@ function startMove(id) {
 }
 function removeSelected() {
   if (!selectedId) return;
+  if (ITEM_BY_TYPE[world.items.get(selectedId).data.type].fixed) { toast('집은 치울 수 없어요. 옮기기와 돌리기는 돼요'); return; }
   doAction({ type: 'remove', id: selectedId }, '치우기');
   select(null);
   toast('치웠어요 · Ctrl+Z로 되돌릴 수 있어요');
@@ -596,7 +635,7 @@ setRole(role);
 // 점프·인사는 친구 화면에도 보이게
 function doJump() { if (avatar.y <= 0.001 && party) party.act('jump'); avatar.jump(); }
 function doWave() { avatar.wave(); if (party) party.act('wave'); }
-document.getElementById('btn-respawn').addEventListener('click', () => { avatar.restore({ x: 0, z: 3, facing: 0 }); avatar.target = null; toast('처음 자리로 왔어요'); });
+document.getElementById('btn-respawn').addEventListener('click', () => { avatar.restore(inside ? { ...ROOM_SPAWN, facing: Math.PI } : { x: 0, z: 3, facing: 0 }); avatar.target = null; doorArmed = false; toast('처음 자리로 왔어요'); });
 document.getElementById('btn-full').addEventListener('click', () => {
   const app = document.getElementById('app');
   if (document.fullscreenElement) document.exitFullscreen();
@@ -609,7 +648,7 @@ document.querySelectorAll('.soon').forEach((b) => b.addEventListener('click', ()
 const titleEl = document.getElementById('room-title');
 const titleInput = document.getElementById('room-title-input');
 const titleBtn = document.getElementById('btn-title-edit');
-function showTitle() { titleEl.textContent = roomTitle; document.title = `${roomTitle} (데모)`; }
+function showTitle() { titleEl.textContent = inside ? `${roomTitle} · 집 안` : roomTitle; document.title = `${roomTitle} (데모)`; }
 function finishTitle(save) {
   if (save) { roomTitle = titleInput.value.trim() || roomTitle; scheduleSave(); }
   titleInput.classList.add('hidden'); titleEl.classList.remove('hidden'); titleBtn.innerHTML = icon('pencil'); titleBtn.title = '섬 이름 고치기';
@@ -658,19 +697,21 @@ btnSound2.addEventListener('click', toggleSound);
 refreshSoundBtn();
 
 const btnReset = document.getElementById('btn-reset');
+const resetName = () => (inside ? '방을 처음 모습으로' : '섬을 처음 모습으로');
 const resetLabel = btnReset.querySelector('span');
 let resetArmed = null;
 btnReset.addEventListener('click', () => {
   if (!resetArmed) {
     resetLabel.textContent = '정말 처음으로? 한 번 더 누르기';
-    resetArmed = setTimeout(() => { resetArmed = null; resetLabel.textContent = '섬을 처음 모습으로'; }, 3000);
+    resetArmed = setTimeout(() => { resetArmed = null; resetLabel.textContent = resetName(); }, 3000);
     return;
   }
   clearTimeout(resetArmed); resetArmed = null;
-  resetLabel.textContent = '섬을 처음 모습으로';
+  resetLabel.textContent = resetName();
   stopPlacing(true); select(null);
-  doAction({ type: 'replaceAll', items: DEFAULT_ITEMS.map((i) => ({ ...i, id: newId() })) }, '처음 모습으로');
-  avatar.restore({ x: 0, z: 3, facing: 0 });
+  doAction({ type: 'replaceAll', items: (inside ? DEFAULT_ROOM_ITEMS : DEFAULT_ITEMS).map((i) => ({ ...i, id: newId() })) }, '처음 모습으로');
+  avatar.restore(inside ? { ...ROOM_SPAWN, facing: Math.PI } : { x: 0, z: 3, facing: 0 });
+  doorArmed = false;
   toast('처음 모습으로 돌아왔어요 · Ctrl+Z로 되돌릴 수 있어요');
 });
 
@@ -702,7 +743,7 @@ document.getElementById('photo-close').addEventListener('click', () => photoModa
 
 function takePhoto() {
   // 선택 표시 같은 꾸미기 도구는 사진에서 빼기
-  const hidden = [selRing, hoverRing, marker, world.grid, placing && placing.ghost].filter((o) => o && o.visible);
+  const hidden = [selRing, hoverRing, marker, world.activeGrid, placing && placing.ghost].filter((o) => o && o.visible);
   hidden.forEach((o) => (o.visible = false));
   renderer.render(scene, camera);
   const shot = canvas.toDataURL('image/png');
@@ -870,10 +911,13 @@ function startParty() {
     scene, camera, viewport, avatar, chat, toast, role: partyRole,
     roomId: space === 'home' ? MY_ROOM : space === 'visit' ? visitId : 'plaza',
     getName: nameOr,
-    getWorld: () => ({ title: roomTitle, items: world.serialize(), env: env.serialize() }),
+    getWorld: () => ({ title: roomTitle, items: inside ? yardItems : world.serialize(), house: inside ? world.serialize() : houseItems, env: env.serialize() }),
+    getInside: () => inside,
     onWorld: (w) => {
       roomTitle = w.title; showTitle();
-      world.apply({ type: 'replaceAll', items: w.items }, { silent: true });
+      // 주인이 보내 준 마당·집 안 모습 중, 지금 내가 있는 곳 것을 보여 줌
+      if (inside) { yardItems = w.items; houseItems = w.house; } else houseItems = w.house;
+      world.apply({ type: 'replaceAll', items: inside ? w.house : w.items }, { silent: true });
       if (w.env) { env.restore(w.env); refreshEnvButtons(); }
       if (currentPane === 'space') refreshSpaceInfo();
     },
@@ -893,6 +937,7 @@ function refreshSpaceUI() {
   document.getElementById('plaza-card').classList.toggle('hidden', space !== 'plaza');
   goBtn.innerHTML = space === 'plaza' ? `${icon('home')}<span>우리 집 가기</span>` : `${icon('plaza')}<span>광장 가기</span>`;
   goBtn.title = space === 'plaza' ? '내 섬으로 돌아가요' : '누구나 모이는 광장으로 가요';
+  resetLabel.textContent = resetName();
   document.body.dataset.space = space;
 }
 
@@ -945,6 +990,7 @@ function moveTo(dest) {
     fadeEl.classList.add('on');
     setTimeout(() => {
       if (space === 'home') saveNow(false); // 떠나기 전에 내 섬 저장
+      if (inside) setInside(false); // 집 안에서 바로 떠나도 다음엔 마당에서 시작
       stopParty();
       stopPlacing(true); select(null);
       if (currentPane === 'furniture') openPanel(null);
@@ -1002,6 +1048,69 @@ document.getElementById('btn-invite').addEventListener('click', () => {
 inviteInput.addEventListener('focus', () => inviteInput.select());
 if (!party) renderPeople([{ name: nameOr(), role, me: true }]);
 
+// ---------- 우리 집: 문으로 들어가고 나오기 ----------
+// 원리: 섬(마당)과 집 안은 서로 다른 작은 공간이에요. 문 앞에 닿으면 화면을 살짝 덮고,
+// 지금 공간의 물건을 넣어 두고(yardItems / houseItems) 다른 공간의 물건을 꺼내 놓은 뒤 다시 걷어 내요.
+// 친구와 함께 있을 땐 같은 연결 그대로, '집 안인지'만 알려 줘서 같은 곳에 있는 사람끼리만 보여요.
+let doorArmed = false; // 방금 나온 문에 바로 다시 들어가지 않게, 문에서 조금 떨어져야 다시 켜짐
+function setInside(on, back) {
+  inside = on;
+  world.setIndoor(on);
+  env.indoor = on;
+  avatar.bounds = on ? clampToRoom : null;
+  if (!on && back) yardBack = null;
+  refreshGridBtn();
+}
+function goThroughDoor(door) {
+  if (moving || placing) return;
+  const enter = !inside;
+  moving = true;
+  document.getElementById('fade-text').textContent = enter ? '집 안으로 들어가는 중…' : '마당으로 나가는 중…';
+  fadeEl.classList.add('on');
+  setTimeout(() => {
+    stopPlacing(true); select(null); setHover(null);
+    undoStack.length = 0; redoStack.length = 0; refreshHistory();
+    avatar.target = null; marker.visible = false;
+    if (enter) {
+      const a = door.rot * Math.PI / 180;
+      yardBack = {
+        avatar: { x: door.x + Math.sin(a) * 1.0, z: door.z + Math.cos(a) * 1.0, facing: a }, // 문 바로 바깥, 집을 등지고
+        cam: { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist },
+      };
+      yardItems = world.serialize();
+      world.apply({ type: 'replaceAll', items: houseItems }, { silent: true });
+      setInside(true);
+      avatar.restore({ ...ROOM_SPAWN, facing: Math.PI });
+      Object.assign(cam, { yaw: 0.55, pitch: 0.78, dist: Math.min(cam.dist, 17) }); // 방이 잘 보이게 비스듬히 위에서
+    } else {
+      houseItems = world.serialize();
+      world.apply({ type: 'replaceAll', items: yardItems }, { silent: true });
+      const back = yardBack || { avatar: { x: 0, z: 3, facing: 0 }, cam: null };
+      setInside(false, true);
+      avatar.restore(back.avatar);
+      if (back.cam) Object.assign(cam, back.cam);
+    }
+    doorArmed = false;
+    cam.target.copy(avatar.position).add(new THREE.Vector3(0, 1.3, 0));
+    showTitle(); refreshSpaceUI();
+    if (currentPane === 'space') refreshSpaceInfo();
+    if (party) party.sendState(true);
+    if (space === 'home') saveNow(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => { fadeEl.classList.remove('on'); moving = false; }));
+    toast(enter ? '집 안에 들어왔어요' : '마당으로 나왔어요');
+  }, 380);
+}
+// 매 프레임: 문 앞에 닿았는지 보기
+function checkDoors() {
+  if (space === 'plaza' || moving || placing) return;
+  const p = avatar.position;
+  const doors = inside ? [{ ...ROOM_DOOR, rot: 0 }] : world.doors();
+  let near = Infinity, hit = null;
+  doors.forEach((d) => { const dd = Math.hypot(p.x - d.x, p.z - d.z); if (dd < near) { near = dd; hit = d; } });
+  if (!doorArmed) { if (near > 1.3) doorArmed = true; return; }
+  if (hit && near < (inside ? 0.45 : 0.55)) goThroughDoor(hit);
+}
+
 // ---------- 모션 ----------
 // 새 모션은 이 목록에 한 줄 더하면 버튼이 생겨요 (목록은 짧게 유지)
 const MOTIONS = [
@@ -1035,6 +1144,8 @@ function frame() {
   avatar.update(dt, typing ? { x: 0, y: 0 } : moveInput(), cam.yaw, world.colliders());
   world.update(dt);
   updateCamera(dt);
+  world.updateWalls(dt, camera.position);
+  checkDoors();
   env.update(dt, avatar.position);
   if (env.flowing) refreshEnvButtons();
   if (marker.visible) {
@@ -1054,7 +1165,7 @@ function frame() {
   updateTools();
   if (party) party.update(dt);
   chat.update();
-  sound.setRain(env.weather === 'rain'); // 비가 오면 빗소리
+  sound.setRain(env.weather === 'rain', inside); // 비가 오면 빗소리 (집 안에서는 작게)
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -1062,4 +1173,4 @@ frame();
 document.getElementById('loading').classList.add('done');
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; } };
+window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; }, get inside() { return inside; }, goThroughDoor };

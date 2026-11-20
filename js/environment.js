@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.27';
-import { glowMat, fireMat } from './catalog.js?v=0.27';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.27';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.28';
+import { glowMat, fireMat } from './catalog.js?v=0.28';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.28';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -22,6 +22,7 @@ export class Environment {
     this.time = 13;
     this.weather = 'clear';
     this.flowing = false;
+    this.indoor = false; // 집 안에 있으면 true (하늘·빛·날씨 입자를 집 안에 맞춤)
     this.realTime = false; // 켜면 한국 실제 시간에 맞춰 하늘이 바뀜
     this.cloudiness = 0; // 0~1, 날씨에 따라 천천히 바뀜
 
@@ -252,6 +253,16 @@ export class Environment {
     const bottom = new THREE.Color(a.bottom).lerp(new THREE.Color(b.bottom), k).lerp(new THREE.Color(night > 0.5 ? 0x8a74b8 : 0xe2d9e6), cl * 0.45);
     this.skyMat.uniforms.bottom.value.copy(bottom);
     this.scene.fog.color.copy(bottom);
+    // 집 창문 유리: 바깥 하늘빛
+    if (this.world.windowMat) this.world.windowMat.color.copy(top).lerp(bottom, 0.55).lerp(this._c2.setHex(0xffffff), 0.15);
+    // 집 안: 바깥(하늘)은 따뜻하고 차분한 단색 배경으로. 밤엔 조금 어둡게
+    if (this.indoor) {
+      const inTop = new THREE.Color(0xe6d8c3).lerp(new THREE.Color(0x4f4862), night * 0.85);
+      const inBot = new THREE.Color(0xf1e7d8).lerp(new THREE.Color(0x6c6280), night * 0.85);
+      this.skyMat.uniforms.top.value.copy(inTop);
+      this.skyMat.uniforms.bottom.value.copy(inBot);
+      this.scene.fog.color.copy(inBot);
+    }
 
     // 물은 하늘색을 비춤
     this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
@@ -267,6 +278,13 @@ export class Environment {
     this.hemi.intensity = ambI;
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.6);
     this.hemi.groundColor.setHex(0x9fbf88).lerp(bottom, 0.3);
+    if (this.indoor) {
+      // 집 안: 창으로 드는 햇빛은 부드럽게, 방 전체는 따뜻하고 고르게
+      this.sun.intensity = sunI * 0.6;
+      this.hemi.intensity = Math.max(ambI, 0.95) * 1.05;
+      this.hemi.color.setHex(0xfff4e6).lerp(new THREE.Color(0xb9b0e0), night * 0.5);
+      this.hemi.groundColor.setHex(0xd9bf9e);
+    }
 
     // 해(낮)·달(밤) 방향: 그림자가 너무 길어지지 않게 높이를 제한
     const ang = ((this.time - 6) / 12) * Math.PI;
@@ -281,7 +299,10 @@ export class Environment {
     this.sun.position.copy(dir).multiplyScalar(40).add(this.sun.target.position);
 
     // 달·별·방울
-    const clearNight = night * (1 - cl);
+    const clearNight = this.indoor ? 0 : night * (1 - cl);
+    this.cloudRoot.visible = !this.indoor;
+    this.rain.visible = this.weather === 'rain' && !this.indoor;         // 집 안에는 비·눈이 안 내려요
+    this.flakes.visible = (this.weather === 'snow' || this.weather === 'petals') && !this.indoor;
     this.moonMat.opacity = clearNight;
     this.moon.visible = clearNight > 0.01;
     this.moon.position.copy(focus).add(new THREE.Vector3(-0.35, 0.42, -1).normalize().multiplyScalar(360));

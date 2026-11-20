@@ -1,8 +1,8 @@
 // 머리 큰 귀여운 아바타와 걷기·점프·인사 움직임
 import * as THREE from 'three';
-import { mat } from './catalog.js?v=0.27';
-import { PALETTE as P } from './palette.js?v=0.27';
-import { PLOT_RADIUS } from './world.js?v=0.27';
+import { mat } from './catalog.js?v=0.28';
+import { PALETTE as P } from './palette.js?v=0.28';
+import { PLOT_RADIUS } from './world.js?v=0.28';
 
 const SPEED = 4.2;     // 걷기 속도
 const RUN_SPEED = 8.4; // 달리기 속도 (걷기의 2배)
@@ -207,8 +207,11 @@ export class Avatar {
         if (this.target && Math.hypot(this.target.x - c.x, this.target.y - c.z) < min) this.target = null;
       }
     }
-    const lim = PLOT_RADIUS - 0.4, dc = Math.hypot(p.x, p.z);
-    if (dc > lim) { p.x *= lim / dc; p.z *= lim / dc; }
+    if (this.bounds) { const c = this.bounds(p.x, p.z); p.x = c.x; p.z = c.z; } // 집 안에서는 벽 안쪽까지만
+    else {
+      const lim = PLOT_RADIUS - 0.4, dc = Math.hypot(p.x, p.z);
+      if (dc > lim) { p.x *= lim / dc; p.z *= lim / dc; }
+    }
 
     // 점프
     this.vy -= 16 * dt;
