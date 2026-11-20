@@ -2,34 +2,58 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat } from './catalog.js?v=0.29';
-import { PALETTE as P } from './palette.js?v=0.29';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.30';
+import { PALETTE as P } from './palette.js?v=0.30';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
 // 우리 집 자리: 섬 뒤쪽 오른편. 문은 처음 서 있는 쪽을 비스듬히 바라봄 (벤치에 길이 막히지 않게)
-export const HOUSE_SPOT = { type: 'cottage', x: 5.5, z: -10.5, rot: -20 };
+export const HOUSE_SPOT = { type: 'cottage', x: 5.5, z: -10.2, rot: -20 };
 // 집이 차지하는 네모 (+ 둘레 여유). 이 안에 있는 물건은 집과 겹침
 export function inHouseArea(h, x, z, margin = 0.7) {
   const a = (h.rot || 0) * Math.PI / 180, dx = x - h.x, dz = z - h.z;
   const lx = dx * Math.cos(a) - dz * Math.sin(a), lz = dx * Math.sin(a) + dz * Math.cos(a);
-  return Math.abs(lx) < 2.65 + margin && lz > -1.95 - margin && lz < 2.9 + margin; // 앞쪽은 발판·문 앞까지
+  return Math.abs(lx) < HOUSE_W / 2 + margin && lz > -HOUSE_D / 2 - margin && lz < HOUSE_D / 2 + 1.1 + margin; // 앞쪽은 발판·문 앞까지
+}
+// 집 자리와 겹치는 물건 정리: 처음부터 있던 자연물은 치우고, 직접 놓은 물건은 집 옆으로 비켜 줌
+export function fitHouse(items) {
+  const h = items.find((m) => m.type === 'cottage');
+  if (!h) return items;
+  const out = items.filter((m) => m === h || !(inHouseArea(h, m.x, m.z) && OUTER_NATURE.some((n) => n.type === m.type && Math.hypot(n.x - m.x, n.z - m.z) < 0.05)));
+  const a = (h.rot || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  out.forEach((m, i) => {
+    if (m === h || !inHouseArea(h, m.x, m.z)) return;
+    const dx = m.x - h.x, dz = m.z - h.z;
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    // 집 옆으로 비켜 주되, 다른 물건과 겹치지 않는 자리를 찾을 때까지 조금씩 더 멀리
+    let p = null;
+    for (let k = 0; k < 12; k++) {
+      const nx = (lx >= 0 ? 1 : -1) * (HOUSE_W / 2 + 1.0 + k * 0.6);
+      p = clampToPlot(h.x + nx * c + lz * s, h.z - nx * s + lz * c);
+      if (!inHouseArea(h, p.x, p.z) && !out.some((o) => o !== m && o !== h && Math.hypot(o.x - p.x, o.z - p.z) < 1.3)) break;
+    }
+    m.x = Math.round(p.x * 100) / 100; m.z = Math.round(p.z * 100) / 100;
+  });
+  return out;
 }
 
-// 집 안: 작은 네모 방 하나 (가로 12, 세로 10)
-export const ROOM_W = 12, ROOM_D = 10, ROOM_H = 3.4;
-export const ROOM_DOOR = { x: 0, z: ROOM_D / 2 - 0.55 };   // 안쪽 문 앞 (여기까지 걸어가면 밖으로)
-export const ROOM_SPAWN = { x: 0, z: ROOM_D / 2 - 2.0 };   // 들어왔을 때 서는 자리
+// 집 안: 바깥 집과 같은 크기의 작은 방 하나. 벽 두께만큼 안쪽이 방바닥
+// 집 안 자리는 '집 가운데'를 (0, 0)으로, 문 쪽을 +z로 하는 집 기준 자리예요
+export const ROOM_T = 0.3;
+export const ROOM_W = HOUSE_W - ROOM_T * 2, ROOM_D = HOUSE_D - ROOM_T * 2, ROOM_H = HOUSE_H + 0.1;
+export const ROOM_DOOR = { x: 0, z: ROOM_D / 2 + 0.55 };   // 문 밖으로 이만큼 나가면 마당으로
+export const ROOM_SPAWN = { x: 0, z: ROOM_D / 2 - 1.3 };   // 들어오면 걸어가 서는 자리
 export const DEFAULT_ROOM_ITEMS = [
-  { type: 'rug', x: 0.5, z: 0.3, rot: 0 },
-  { type: 'table', x: 0.5, z: 0.1, rot: 0 },
-  { type: 'chair', x: -0.55, z: 0.15, rot: 90 },
-  { type: 'chair', x: 1.55, z: 0.15, rot: 270 },
-  { type: 'bed', x: -4.1, z: -3.55, rot: 0 },
-  { type: 'shelf', x: 2.6, z: -4.45, rot: 0 },
-  { type: 'potPlant', x: 4.9, z: -4.1, rot: 0 },
-  { type: 'potPlant', x: -5.0, z: 3.6, rot: 45 },
-  { type: 'floatLantern', x: 4.2, z: 1.8, rot: 0 },
+  { type: 'rug', x: 0.8, z: 0.2, rot: 0 },
+  { type: 'table', x: 0.8, z: 0.1, rot: 0 },
+  { type: 'chair', x: -0.25, z: 0.15, rot: 90 },
+  { type: 'chair', x: 1.85, z: 0.15, rot: 270 },
+  { type: 'bed', x: -3.9, z: -2.7, rot: 0 },
+  { type: 'shelf', x: 2.0, z: -3.7, rot: 0 },
+  { type: 'potPlant', x: 4.6, z: -3.4, rot: 0 },
+  { type: 'potPlant', x: -4.6, z: 3.2, rot: 45 },
+  { type: 'floatLantern', x: 3.6, z: 2.0, rot: 0 },
+  { type: 'bench', x: -4.4, z: 0.6, rot: 90 },
 ];
 
 export const DEFAULT_ITEMS = [
@@ -68,7 +92,8 @@ export const OUTER_NATURE = (() => {
   }
   return out;
 })();
-DEFAULT_ITEMS.push(...OUTER_NATURE.filter((n) => !inHouseArea(HOUSE_SPOT, n.x, n.z)));
+DEFAULT_ITEMS.push(...OUTER_NATURE);
+DEFAULT_ITEMS.splice(0, DEFAULT_ITEMS.length, ...fitHouse(DEFAULT_ITEMS.map((i) => ({ ...i }))));
 
 // 광장: 모두가 만나는 작은 마을 광장 (데모라 '광장인 걸 알 정도'로 작게)
 // 가운데 분수대, 둘레에 벤치 4개와 가로등 4개, 한쪽에 큰 나무 한 그루,
@@ -103,15 +128,23 @@ export function newId() {
 export class World {
   constructor(scene) {
     this.scene = scene;
-    this.items = new Map(); // id -> { data, obj }
-    this.root = new THREE.Group();
-    scene.add(this.root);
+    this.items = new Map(); // id -> { data, obj }  (지금 꾸미는 곳의 물건: 마당 또는 집 안)
+    // 마당 전체(섬·물·마당 물건)를 담는 묶음. 집 안에 있는 동안에는 이 묶음을 통째로 돌리고 옮겨서
+    // '집 가운데 = (0,0)'이 되게 해요. 그래서 집 안도 마당도 화면 전환 없이 한 장면에 함께 보여요
+    this.frame = new THREE.Group();
+    scene.add(this.frame);
+    this.yardRoot = new THREE.Group();
+    this.frame.add(this.yardRoot);
+    this.houseRoot = new THREE.Group(); // 집 안 물건 (집 기준 자리)
+    scene.add(this.houseRoot);
+    this.root = this.yardRoot;
     this.listeners = [];
-    this.outdoor = new THREE.Group(); // 섬·물 (집 안에 있을 때는 숨김)
-    scene.add(this.outdoor);
+    this.outdoor = new THREE.Group(); // 섬·물
+    this.frame.add(this.outdoor);
     this.buildTerrain();
     this.buildRoom();
     this.indoor = false;
+    this.yardMap = null; // 집 안에 있는 동안: 마당 물건 (보이기만 함)
   }
 
   onChange(fn) { this.listeners.push(fn); }
@@ -207,7 +240,7 @@ export class World {
   // ---- 집 안 (작은 방 하나) ----
   // 벽 네 면 중 카메라 쪽 벽은 낮게 깎여서, 언제나 안쪽 벽 두세 면만 보여요 (카메라를 돌려도)
   buildRoom() {
-    const W = ROOM_W, D = ROOM_D, H = ROOM_H, T = 0.3;
+    const W = ROOM_W, D = ROOM_D, H = ROOM_H, T = ROOM_T;
     const room = new THREE.Group();
     room.visible = false;
     this.scene.add(room);
@@ -293,7 +326,7 @@ export class World {
       return wall;
     };
     this.walls = [
-      makeWall(W + T * 2, 0, -D / 2 - T / 2, 0, { windows: [-2.6, 2.6] }),        // 뒤
+      makeWall(W + T * 2, 0, -D / 2 - T / 2, 0, { windows: [-3.0, 3.0] }),        // 뒤
       makeWall(D, -W / 2 - T / 2, 0, Math.PI / 2, { windows: [0] }),              // 왼쪽
       makeWall(D, W / 2 + T / 2, 0, -Math.PI / 2, { windows: [0] }),              // 오른쪽
       makeWall(W + T * 2, 0, D / 2 + T / 2, Math.PI, { gap: 1.5 }),               // 앞 (문 자리 비움)
@@ -304,11 +337,11 @@ export class World {
     const shape = (hw, hh) => { const s = new THREE.Shape(); s.moveTo(-hw, 0); s.lineTo(-hw, hh); s.absarc(0, hh, hw, Math.PI, 0, true); s.lineTo(hw, 0); s.lineTo(-hw, 0); return s; };
     const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(shape(0.78, 1.75), { depth: T + 0.1, bevelEnabled: false }), dark);
     fr.position.z = -(T + 0.1) / 2; door.add(fr);
-    const pane = new THREE.Mesh(new THREE.ExtrudeGeometry(shape(0.6, 1.7), { depth: 0.08, bevelEnabled: false }), wood);
-    pane.position.z = -T / 2 - 0.1; door.add(pane);
-    [-0.2, 0.2].forEach((x) => { const l = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.9, 0.02), dark); l.position.set(x, 1.15, -T / 2 - 0.11); door.add(l); });
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), mat(P.stoneDark)); knob.position.set(-0.38, 1.05, -T / 2 - 0.13); door.add(knob);
-    const dwin = new THREE.Mesh(new THREE.CircleGeometry(0.2, 14), glowMat); dwin.position.set(0, 1.95, -T / 2 - 0.115); dwin.rotation.y = Math.PI; door.add(dwin);
+    // 문틀은 가운데가 뚫린 아치 (지나다닐 수 있게). 앞쪽 벽이 낮아지면 문틀도 같이 낮아져서 방을 가리지 않아요
+    door.remove(fr);
+    const ring = shape(0.78, 1.75); ring.holes.push(shape(0.6, 1.72));
+    const fr2 = new THREE.Mesh(new THREE.ExtrudeGeometry(ring, { depth: T + 0.1, bevelEnabled: false }), dark);
+    fr2.position.z = -(T + 0.1) / 2; door.add(fr2);
     door.position.set(0, 0, D / 2 + T / 2);
     door.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     room.add(door);
@@ -331,17 +364,73 @@ export class World {
     this.roomGrid.material.transparent = true; this.roomGrid.material.opacity = 0.2;
     this.roomGrid.position.y = 0.01; this.roomGrid.visible = false;
     room.add(this.roomGrid);
+    // 지붕: 바깥 집 지붕과 같은 모양. 들어가면 스르륵 투명해지며 사라지고, 나오면 다시 덮여요
+    const R = HOUSE_D / 2 + 0.35, L = HOUSE_W + 0.7;
+    this.roofMat = roofMaterial().clone();
+    this.roofMat.transparent = true;
+    this.roof = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 20, 1, true, 0, Math.PI), this.roofMat);
+    this.roof.rotation.z = Math.PI / 2; this.roof.scale.set(0.72, 1, 1);
+    this.roof.position.y = H;
+    room.add(this.roof);
+    this.roofOpacity = 1;
+    this.closing = false;
   }
 
-  // 마당 ↔ 집 안 바꾸기
-  setIndoor(on) {
-    this.indoor = on;
-    this.outdoor.visible = !on;
-    this.room.visible = on;
-    this.groundPick = on ? this.roomFloor : this.islandTop;
+  // ---- 집에 들어가기 / 나오기 (화면 전환 없이) ----
+  // house: 마당에서의 집 자리 { x, z, rot }. 집 안 물건은 houseItems
+  enterHouse(house, houseItems) {
+    const a = house.rot * Math.PI / 180;
+    this.houseT = { x: house.x, z: house.z, a };
+    // 마당 묶음을 거꾸로 돌리고 옮겨서 집 가운데가 (0,0)에 오게
+    this.frame.rotation.y = -a;
+    this.frame.position.set(-house.x, 0, -house.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), -a);
+    this.frame.position.y = -0.04; // 마당 잔디를 방바닥보다 살짝 아래로 (바닥에 잔디가 비치지 않게)
+    this.yardMap = this.items;
+    this.yardMap.forEach(({ data, obj }) => { if (data.type === 'cottage') obj.visible = false; });
+    this.items = new Map();
+    this.root = this.houseRoot;
+    houseItems.forEach((it) => this._add(it));
+    this.indoor = true; this.closing = false;
+    this.room.visible = true;
+    this.roofOpacity = 1;
+    this.walls.forEach((w) => { w.userData.cut = 1; }); // 처음엔 다 서 있다가 앞쪽 벽이 천천히 낮아짐
+    this.groundPick = this.roomFloor;
     this.grid.visible = false; this.roomGrid.visible = false;
-    if (on) this.walls.forEach((w) => { w.userData.cut = -1; }); // 처음 한 번은 바로 맞춤
   }
+  // 지붕이 다 덮인 뒤 마당으로 돌아가기. 집 안 물건 목록을 돌려줌
+  exitHouse() {
+    const house = this.serialize();
+    [...this.items.keys()].forEach((id) => this._remove(id));
+    this.items = this.yardMap; this.yardMap = null;
+    this.items.forEach(({ obj }) => { obj.visible = true; });
+    this.root = this.yardRoot;
+    this.frame.rotation.y = 0; this.frame.position.set(0, 0, 0);
+    this.indoor = false; this.closing = false;
+    this.room.visible = false;
+    this.groundPick = this.islandTop;
+    this.grid.visible = false; this.roomGrid.visible = false;
+    return house;
+  }
+  // 집 안에 있는 동안 마당 모습이 바뀌면 (친구 섬에서 주인이 꾸밀 때) 뒤쪽 마당만 새로 그림
+  setYard(items) {
+    if (!this.indoor) return;
+    const cur = this.items, curRoot = this.root;
+    this.items = this.yardMap; this.root = this.yardRoot;
+    [...this.items.keys()].forEach((id) => this._remove(id));
+    items.forEach((it) => this._add(it));
+    this.items.forEach(({ data, obj }) => { if (data.type === 'cottage') obj.visible = false; });
+    this.items = cur; this.root = curRoot;
+  }
+  // 집 기준 자리 ↔ 마당 자리
+  toLocal(x, z) {
+    const t = this.houseT, dx = x - t.x, dz = z - t.z, c = Math.cos(t.a), s = Math.sin(t.a);
+    return { x: dx * c - dz * s, z: dx * s + dz * c };
+  }
+  toYard(x, z) {
+    const t = this.houseT, c = Math.cos(t.a), s = Math.sin(t.a);
+    return { x: t.x + x * c + z * s, z: t.z - x * s + z * c };
+  }
+
   get activeGrid() { return this.indoor ? this.roomGrid : this.grid; }
 
   // 카메라 쪽 벽은 낮게: 벽의 바깥 방향과 카메라 방향이 같으면 깎음 (천천히)
@@ -350,12 +439,19 @@ export class World {
     const LOW = 0.12;
     this.walls.forEach((w) => {
       const toCam = new THREE.Vector3(camPos.x, 0, camPos.z).normalize(); // 방 가운데에서 카메라 쪽 방향
-      const want = w.userData.normal.dot(toCam) > 0.3 ? LOW : 1;
-      const cur = w.userData.cut < 0 ? want : w.userData.cut + (want - w.userData.cut) * Math.min(1, dt * 6);
+      const want = !this.closing && w.userData.normal.dot(toCam) > 0.3 ? LOW : 1; // 나갈 때는 벽을 다시 세움
+      const cur = w.userData.cut + (want - w.userData.cut) * Math.min(1, dt * 5);
       w.userData.cut = cur;
       w.userData.body.scale.y = cur;
       w.userData.windows.forEach((g) => { g.visible = cur > 0.7; });
     });
+    this.roomDoor.scale.y = Math.max(0.12, this.walls[3].userData.cut);
+    // 지붕: 들어오면 사라지고, 나갈 때 다시 덮임
+    const wantRoof = this.closing ? 1 : 0;
+    this.roofOpacity += Math.sign(wantRoof - this.roofOpacity) * Math.min(Math.abs(wantRoof - this.roofOpacity), dt * 2.2);
+    this.roofMat.opacity = this.roofOpacity;
+    this.roof.visible = this.roofOpacity > 0.01;
+    this.roofMat.depthWrite = this.roofOpacity > 0.98;
     // 모서리 기둥: 붙은 두 벽 중 하나라도 깎이면 같이 낮춤
     this.corners.forEach((p) => {
       const [sx, sz] = p.userData.corner;
@@ -387,10 +483,12 @@ export class World {
     const tt = performance.now() / 1000;
     this.ripples.position.y = -0.88 + Math.sin(tt * 0.8) * 0.015;
     const t = performance.now() / 1000;
-    this.items.forEach(({ obj }) => {
+    const bob = ({ obj }) => {
       if (obj.userData.float) obj.userData.float.position.y = 1.3 + Math.sin(t * 1.4 + obj.position.x) * 0.12;
       if (obj.userData.type === 'fountain') obj.children.forEach((c) => { if (c.userData.bob) c.position.y = 2.42 + Math.abs(Math.sin(t * 1.6)) * 0.12; });
-    });
+    };
+    this.items.forEach(bob);
+    if (this.yardMap) this.yardMap.forEach(bob);
   }
 
   // ---- 데이터 바꾸기 (모든 변경은 여기로) ----
@@ -451,9 +549,9 @@ export class World {
 
   lightSources() {
     const out = [];
-    this.items.forEach(({ obj }) => {
-      if (obj.userData.light) out.push(obj.localToWorld(obj.userData.light.clone()));
-    });
+    const add = ({ obj }) => { if (obj.userData.light && obj.visible) out.push(obj.localToWorld(obj.userData.light.clone())); };
+    this.items.forEach(add);
+    if (this.yardMap) this.yardMap.forEach(add); // 집 안에서도 마당 등불 빛이 보이게
     return out;
   }
 
@@ -475,7 +573,9 @@ export function snap(v) {
   return Math.round(v * 2) / 2; // 0.5칸 단위로 맞추기
 }
 // 방 밖으로 나가지 않게 (벽 안쪽으로)
-export function clampToRoom(x, z, pad = 0.45) {
+export function clampToRoom(x, z, pad = 0.45, door = false) {
+  // 걷는 사람은 문 자리(앞쪽 가운데)로만 벽 밖으로 지나갈 수 있음
+  if (door && z > ROOM_D / 2 - pad && Math.abs(x) < 0.9) return { x: Math.max(-0.5, Math.min(0.5, x)), z: Math.min(ROOM_D / 2 + 1.6, z) };
   return { x: Math.max(-ROOM_W / 2 + pad, Math.min(ROOM_W / 2 - pad, x)), z: Math.max(-ROOM_D / 2 + pad, Math.min(ROOM_D / 2 - pad, z)) };
 }
 // 섬 밖으로 나가지 않게 안쪽으로 당기기

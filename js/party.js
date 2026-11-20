@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.29';
-import { PRESETS } from './chat.js?v=0.29';
-import { openLink, netConfigured } from './net.js?v=0.29';
+import { Avatar } from './avatar.js?v=0.30';
+import { PRESETS } from './chat.js?v=0.30';
+import { openLink, netConfigured } from './net.js?v=0.30';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -41,9 +41,11 @@ const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export class Party {
-  constructor({ scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, getInside, onWorld, onPeople, toast }) {
+  constructor({ scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, getInside, view, onWorld, onPeople, toast }) {
     Object.assign(this, { scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast });
-    this.getInside = getInside || (() => false); // 내가 집 안에 있는지 (같은 곳에 있는 사람끼리만 보이게)
+    this.getInside = getInside || (() => false); // 내가 집 안에 있는지
+    // 친구 자리(친구 기준)를 내 화면 자리로 바꾸기. null이면 안 보임 (친구는 집 안, 나는 마당 → 지붕에 가려짐)
+    this.view = view || ((x, z, f, pin) => (pin === this.getInside() ? { x, z, f } : null));
     this.id = randId(8); // 이 창의 이름표 (창마다 다름)
     this.peers = new Map(); // id → { name, role, av, tag, tx, tz, f, r, last }
     this.link = null;
@@ -111,6 +113,9 @@ export class Party {
     this.send(s);
   }
 
+  // 내가 집에 들어가거나 나와서 '내 화면 자리'가 바뀌면, 친구들을 새 자리로 바로 옮겨 놓음
+  frameChanged() { this.peers.forEach((p) => { p.jumpNext = true; }); }
+
   // 점프·인사를 친구에게도
   act(a) { this.send({ t: 'act', a }); }
 
@@ -144,8 +149,8 @@ export class Party {
         break;
       case 'st':
         p.tx = num(m.x, 30); p.tz = num(m.z, 30); p.f = num(m.f, 10); p.r = !!m.r;
-        if (!!m.s !== p.inside) { p.inside = !!m.s; p.jumpNext = true; } // 집 안 ↔ 마당을 오가면 걸어오지 않고 바로 그 자리에
-        if (!p.placed) { p.av.restore({ x: p.tx, z: p.tz, facing: p.f }); p.placed = true; p.jumpNext = false; }
+        p.inside = !!m.s;
+        if (!p.placed) { p.placed = true; p.jumpNext = true; }
         break;
       case 'act':
         if (m.a === 'jump') p.av.jump();
@@ -214,7 +219,7 @@ export class Party {
 
   headOf(id) {
     const p = this.peers.get(id);
-    return p && p.placed && p.inside === this.getInside() ? p.av.position.clone().add(new THREE.Vector3(0, 2.15 + p.av.y, 0)) : null;
+    return p && p.placed && p.av.root.visible ? p.av.position.clone().add(new THREE.Vector3(0, 2.15 + p.av.y, 0)) : null;
   }
 
   makeTag(me, owner) {
@@ -246,15 +251,17 @@ export class Party {
       if (!p.placed) return;
       const av = p.av, pos = av.position;
       // 나와 다른 곳(집 안 / 마당)에 있는 친구는 안 보이게
-      if (p.inside !== this.getInside()) { av.root.visible = false; p.tag.style.display = 'none'; p.jumpNext = true; return; }
-      if (p.jumpNext) { av.restore({ x: p.tx, z: p.tz, facing: p.f }); av.target = null; p.jumpNext = false; }
+      const v = this.view(p.tx, p.tz, p.f, p.inside);
+      if (!v) { av.root.visible = false; p.tag.style.display = 'none'; p.jumpNext = true; return; }
+      const tx = v.x, tz = v.z, tf = v.f;
+      if (p.jumpNext) { av.restore({ x: tx, z: tz, facing: tf }); av.target = null; p.jumpNext = false; }
       av.root.visible = true;
-      const d = Math.hypot(p.tx - pos.x, p.tz - pos.z);
-      if (d > 8) { av.restore({ x: p.tx, z: p.tz, facing: p.f }); av.target = null; }
-      else if (d > 0.1) { av.moveTo(p.tx, p.tz); av.running = p.r || d > 2.5; }
+      const d = Math.hypot(tx - pos.x, tz - pos.z);
+      if (d > 8) { av.restore({ x: tx, z: tz, facing: tf }); av.target = null; }
+      else if (d > 0.1) { av.moveTo(tx, tz); av.running = p.r || d > 2.5; }
       else if (!av.target) {
         // 멈춰 있으면 친구가 보는 방향으로 천천히 몸을 돌림
-        let diff = p.f - av.facing; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        let diff = tf - av.facing; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         av.facing += diff * Math.min(1, dt * 8); av.root.rotation.y = av.facing;
       }
       av.update(dt, { x: 0, y: 0 }, 0, []);

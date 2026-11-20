@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.29';
-import { glowMat, fireMat } from './catalog.js?v=0.29';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.29';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.30';
+import { glowMat, fireMat } from './catalog.js?v=0.30';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.30';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
@@ -204,6 +204,12 @@ export class Environment {
     this.scene.add(this.flakes);
   }
 
+  // 집 안에 있을 때: 방 위쪽(지붕 자리)에 닿은 빗방울·눈송이는 다시 하늘로 (방 안으로는 안 들어옴)
+  underRoof(x, y, z) {
+    const b = this.roomBox;
+    return !!b && y < b.h && Math.abs(x) < b.hw && Math.abs(z) < b.hd;
+  }
+
   setTime(t) { this.time = ((t % 24) + 24) % 24; }
   setWeather(w) {
     this.weather = w;
@@ -254,20 +260,12 @@ export class Environment {
     this.skyMat.uniforms.bottom.value.copy(bottom);
     this.scene.fog.color.copy(bottom);
     // 뿌연 안개: 흐린 날엔 멀리 있는 것부터 하늘빛으로 부드럽게 흐려짐 (비·눈 날은 조금만, 집 안에서는 없음)
-    const wantHaze = this.indoor ? 0 : ({ cloudy: 1, rain: 0.45, snow: 0.3 }[this.weather] || 0);
+    const wantHaze = ({ cloudy: 1, rain: 0.45, snow: 0.3 }[this.weather] || 0);
     this.haze = (this.haze || 0) + (wantHaze - (this.haze || 0)) * Math.min(1, dt * 1.2);
     this.scene.fog.near = 80 - this.haze * 76;  // 맑음 80 → 흐림 4
     this.scene.fog.far = 380 - this.haze * 322; // 맑음 380 → 흐림 58
     // 집 창문 유리: 바깥 하늘빛
     if (this.world.windowMat) this.world.windowMat.color.copy(top).lerp(bottom, 0.55).lerp(this._c2.setHex(0xffffff), 0.15);
-    // 집 안: 바깥(하늘)은 따뜻하고 차분한 단색 배경으로. 밤엔 조금 어둡게
-    if (this.indoor) {
-      const inTop = new THREE.Color(0xe6d8c3).lerp(new THREE.Color(0x4f4862), night * 0.85);
-      const inBot = new THREE.Color(0xf1e7d8).lerp(new THREE.Color(0x6c6280), night * 0.85);
-      this.skyMat.uniforms.top.value.copy(inTop);
-      this.skyMat.uniforms.bottom.value.copy(inBot);
-      this.scene.fog.color.copy(inBot);
-    }
 
     // 물은 하늘색을 비춤
     this.world.water.material.color.copy(top).lerp(bottom, 0.7).lerp(this._c2.setHex(0xffffff), 0.08);
@@ -283,13 +281,7 @@ export class Environment {
     this.hemi.intensity = ambI;
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.6);
     this.hemi.groundColor.setHex(0x9fbf88).lerp(bottom, 0.3);
-    if (this.indoor) {
-      // 집 안: 창으로 드는 햇빛은 부드럽게, 방 전체는 따뜻하고 고르게
-      this.sun.intensity = sunI * 0.6;
-      this.hemi.intensity = Math.max(ambI, 0.95) * 1.05;
-      this.hemi.color.setHex(0xfff4e6).lerp(new THREE.Color(0xb9b0e0), night * 0.5);
-      this.hemi.groundColor.setHex(0xd9bf9e);
-    }
+    if (this.indoor) this.hemi.groundColor.setHex(0xd9bf9e); // 집 안: 마루에서 올라오는 따뜻한 반사빛
 
     // 해(낮)·달(밤) 방향: 그림자가 너무 길어지지 않게 높이를 제한
     const ang = ((this.time - 6) / 12) * Math.PI;
@@ -298,16 +290,16 @@ export class Environment {
       ? new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.45, Math.sin(ang)), 0.5)
       : new THREE.Vector3(-0.5, 0.8, -0.6);
     dir.normalize();
+    if (this.frameRot) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.frameRot); // 집 안 기준으로 돌려 놓은 동안에도 해는 같은 쪽에서
     // 그림자 범위가 캐릭터를 따라다니게 (떨림 없게 2칸 단위로 맞춤)
     const fx = Math.round(focus.x / 2) * 2, fz = Math.round(focus.z / 2) * 2;
     this.sun.target.position.set(fx, 0, fz);
     this.sun.position.copy(dir).multiplyScalar(40).add(this.sun.target.position);
 
     // 달·별·방울
-    const clearNight = this.indoor ? 0 : night * (1 - cl);
-    this.cloudRoot.visible = !this.indoor;
-    this.rain.visible = this.weather === 'rain' && !this.indoor;         // 집 안에는 비·눈이 안 내려요
-    this.flakes.visible = (this.weather === 'snow' || this.weather === 'petals') && !this.indoor;
+    const clearNight = night * (1 - cl);
+    this.rain.visible = this.weather === 'rain';
+    this.flakes.visible = this.weather === 'snow' || this.weather === 'petals';
     this.moonMat.opacity = clearNight;
     this.moon.visible = clearNight > 0.01;
     this.moon.position.copy(focus).add(new THREE.Vector3(-0.35, 0.42, -1).normalize().multiplyScalar(360));
@@ -341,7 +333,7 @@ export class Environment {
       const p = this.rain.geometry.attributes.position;
       for (let i = 0; i < p.count; i += 2) {
         let y = p.getY(i) - dt * 22;
-        if (y < -1) y += 25;
+        if (y < -1 || this.underRoof(p.getX(i) + focus.x, y, p.getZ(i) + focus.z)) y += 25; // 집 안(지붕 아래)에는 안 내림
         p.setY(i, y); p.setY(i + 1, y - 0.7);
       }
       p.needsUpdate = true;
@@ -354,7 +346,7 @@ export class Environment {
       for (let i = 0; i < p.count; i++) {
         const s = this.flakeSeed[i];
         let y = p.getY(i) - dt * fall * (0.7 + (s % 1) * 0.6);
-        if (y < -0.5) y += 25;
+        if (y < -0.5 || this.underRoof(p.getX(i) + focus.x, y, p.getZ(i) + focus.z)) y += 25;
         p.setY(i, y);
         p.setX(i, p.getX(i) + Math.sin(tt * (petals ? 1.6 : 0.8) + s) * dt * (petals ? 0.9 : 0.4));
       }
