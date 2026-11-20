@@ -2,7 +2,7 @@
 // 원리: 보이지 않는 작은 3D 화면을 하나 만들고, 물건을 하나씩 올려 사진을 찍은 뒤 치웁니다.
 // 그래서 물건 모양을 고치면 카드 그림도 저절로 같이 바뀝니다.
 import * as THREE from 'three';
-import { buildItem } from './catalog.js?v=0.35';
+import { buildItem } from './catalog.js?v=0.36';
 
 export function makeThumbnails(types, size = 112) {
   const out = {};

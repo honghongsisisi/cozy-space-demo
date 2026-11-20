@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.35';
-import { PALETTE as P } from './palette.js?v=0.35';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.36';
+import { PALETTE as P } from './palette.js?v=0.36';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 
@@ -393,7 +393,6 @@ export class World {
     this.indoor = true; this.closing = false;
     this.room.visible = true;
     this.roofOpacity = 1;
-    this.walls.forEach((w) => { w.userData.cut = 1; }); // 처음엔 다 서 있다가 앞쪽 벽이 천천히 낮아짐
     this.groundPick = this.roomFloor;
     this.grid.visible = false; this.roomGrid.visible = false;
   }
@@ -436,11 +435,13 @@ export class World {
   // 카메라 쪽 벽은 낮게: 벽의 바깥 방향과 카메라 방향이 같으면 깎음 (천천히)
   updateWalls(dt, camPos) {
     if (!this.indoor) return;
+    // 원작 방식: 벽은 '안쪽 면'만 있는 것처럼. 카메라가 벽 바깥쪽에 있으면 그 벽은 안 보이고(바닥 테두리 높이만 남김),
+    // 안쪽에 있으면 보여요. 벽이 카메라와 나란해지는(옆으로 보이는) 순간에만 바뀌어서 출렁이는 움직임이 없어요
     const LOW = 0.12;
     this.walls.forEach((w) => {
-      const toCam = new THREE.Vector3(camPos.x, 0, camPos.z).normalize(); // 방 가운데에서 카메라 쪽 방향
-      const want = !this.closing && w.userData.normal.dot(toCam) > 0.3 ? LOW : 1; // 나갈 때는 벽을 다시 세움
-      const cur = w.userData.cut + (want - w.userData.cut) * Math.min(1, dt * 5);
+      const n = w.userData.normal; // 바깥 방향
+      const side = (camPos.x - w.position.x) * n.x + (camPos.z - w.position.z) * n.z; // > 0 이면 카메라가 벽 바깥쪽
+      const cur = side > 0 ? LOW : 1;
       w.userData.cut = cur;
       w.userData.body.scale.y = cur;
       w.userData.windows.forEach((g) => { g.visible = cur > 0.7; });
@@ -448,7 +449,7 @@ export class World {
     this.roomDoor.scale.y = Math.max(0.12, this.walls[3].userData.cut);
     // 지붕: 들어오면 사라지고, 나갈 때 다시 덮임
     const wantRoof = this.closing ? 1 : 0;
-    this.roofOpacity += Math.sign(wantRoof - this.roofOpacity) * Math.min(Math.abs(wantRoof - this.roofOpacity), dt * 2.2);
+    this.roofOpacity += Math.sign(wantRoof - this.roofOpacity) * Math.min(Math.abs(wantRoof - this.roofOpacity), dt * 5); // 0.2초쯤
     this.roofMat.opacity = this.roofOpacity;
     this.roof.visible = this.roofOpacity > 0.01;
     this.roofMat.depthWrite = this.roofOpacity > 0.98;
