@@ -1,6 +1,6 @@
 // 아이템 목록. 새 물건을 넣으려면 ITEMS에 한 줄 추가하고 build 함수를 만들면 됩니다.
 import * as THREE from 'three';
-import { PALETTE as P } from './palette.js?v=0.30';
+import { PALETTE as P } from './palette.js?v=0.31';
 
 const matCache = new Map();
 export function mat(color, opts = {}) {
@@ -50,10 +50,13 @@ function roofTexture() {
 }
 
 let roofMat_ = null;
-function roofMaterial() {
+export function roofMaterial() {
   if (!roofMat_) roofMat_ = new THREE.MeshLambertMaterial({ color: P.roof, side: THREE.DoubleSide, map: roofTexture() });
   return roofMat_;
 }
+
+// 집 크기: 바깥 모습과 집 안 방이 같은 크기라서, 들어가면 그 자리에서 지붕만 사라지고 방이 보여요
+export const HOUSE_W = 11, HOUSE_D = 8.5, HOUSE_H = 2.8; // v0.30: 방이 넉넉하도록 크게
 
 const builders = {
   treeRound() {
@@ -201,7 +204,7 @@ const builders = {
   // 둥근 지붕의 아담한 오두막. 앞쪽(+z) 가운데가 문이고, 문 앞까지 걸어가면 집 안으로 들어가요.
   cottage() {
     const g = new THREE.Group();
-    const W = 5, D = 3.6, H = 2.0; // 너비·깊이·벽 높이
+    const W = HOUSE_W, D = HOUSE_D, H = HOUSE_H; // 너비·깊이·벽 높이 (집 안 방과 같은 크기)
     const wall = mat(P.houseWall), wood = mat(P.wood), dark = mat(P.woodDark);
     // 바닥 받침 + 벽
     g.add(mesh(new THREE.BoxGeometry(W + 0.3, 0.28, D + 0.3), dark, 0, 0.14, 0));
@@ -234,8 +237,8 @@ const builders = {
       g.add(ring);
     });
     // 굴뚝 (돌)
-    g.add(mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), mat(P.stone), 1.5, H + 1.2, -0.5));
-    g.add(mesh(new THREE.BoxGeometry(0.62, 0.12, 0.62), mat(P.stoneDark), 1.5, H + 1.8, -0.5));
+    g.add(mesh(new THREE.BoxGeometry(0.6, 1.3, 0.6), mat(P.stone), 3.4, H + 2.6, -1.3));
+    g.add(mesh(new THREE.BoxGeometry(0.74, 0.14, 0.74), mat(P.stoneDark), 3.4, H + 3.3, -1.3));
     // 문: 위가 둥근 나무 문 + 문틀 + 손잡이 + 작은 둥근 창
     const fz = D / 2;
     const frameShape = new THREE.Shape();
@@ -257,7 +260,7 @@ const builders = {
     g.add(mesh(new THREE.BoxGeometry(1.4, 0.1, 0.4), wood, 0, 0.05, fz + 0.95));
     // 문 양옆 창문: 세이지 창틀 + 십자 창살. 유리는 밤이 되면 따뜻하게 불이 켜져요
     [-1, 1].forEach((sx) => {
-      const x = sx * 1.55;
+      const x = sx * 2.8;
       g.add(mesh(new THREE.BoxGeometry(0.95, 0.85, 0.08), mat(P.sage), x, 1.25, fz + 0.03));
       const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.65), glowMat);
       glass.position.set(x, 1.25, fz + 0.075);
@@ -411,9 +414,9 @@ export const ITEMS = [
   { type: 'potPlant',  name: '화분',     emoji: '🪴', radius: 0.3 , group: 'room' },
   // 집: 섬마다 한 채. 가구 창에는 없고, 옮기기·돌리기만 돼요 (치우기 X)
   // colliders: 네모난 집에 맞춰 부딪히는 동그라미 여러 개 (집 가운데 기준 자리)
-  { type: 'cottage',   name: '우리 집',  emoji: '🏠', radius: 2.6 , group: 'home', fixed: true,
-    colliders: [-1.75, -0.6, 0.6, 1.75].flatMap((x) => [{ x, z: -0.85, r: 1.0 }, { x, z: 0.85, r: 1.0 }]),
-    door: { x: 0, z: 2.3 } },
+  { type: 'cottage',   name: '우리 집',  emoji: '🏠', radius: 5.2 , group: 'home', fixed: true,
+    colliders: [-4.3, -2.6, -0.9, 0.9, 2.6, 4.3].flatMap((x) => [-3.05, -1.0, 1.0, 3.05].map((z) => ({ x, z, r: 1.2 }))), // 네모난 집을 동그라미로 채움
+    door: { x: 0, z: HOUSE_D / 2 + 0.2 } },
   // 광장 전용 (group이 ITEM_GROUPS에 없어서 가구 창에는 안 보임)
   { type: 'fountain',  name: '분수대',   emoji: '⛲', radius: 2.2 , group: 'plaza' },
   { type: 'bigTree',   name: '큰 나무',  emoji: '🌳', radius: 0.7 , group: 'plaza' },
