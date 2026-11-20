@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.32';
-import { PRESETS } from './chat.js?v=0.32';
-import { openLink, netConfigured } from './net.js?v=0.32';
+import { Avatar } from './avatar.js?v=0.33';
+import { PRESETS } from './chat.js?v=0.33';
+import { openLink, netConfigured } from './net.js?v=0.33';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
