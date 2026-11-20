@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.40">
+  <link rel="stylesheet" href="style.css?v=0.41">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -56,6 +56,7 @@
     </div>
 
     <div class="room-nav">
+      <button id="btn-ghost-join" class="btn btn-ghost-join ghost-only" title="가입하면 내 섬이 생기고, 이야기도 나눌 수 있어요"><i data-icon="island"></i><span>가입하고 내 섬 받기</span></button>
       <button class="btn soon" data-soon="추천하기"><i data-icon="heart"></i>추천 0</button>
       <button id="btn-go-home" class="btn btn-go hidden" title="내 섬으로 돌아가요"><i data-icon="home"></i><span>우리 집 가기</span></button>
       <button id="btn-go" class="btn btn-go" title="누구나 모이는 광장으로 가요"><i data-icon="plaza"></i><span>광장 가기</span></button>
@@ -164,7 +165,7 @@
             <div class="info-row"><span>섬 이름</span><b id="space-title">나의 작은 섬</b></div>
             <div class="info-row"><span>놓인 물건</span><b id="space-count">0개</b></div>
             <div class="info-groups" id="space-groups"></div>
-            <div class="info-row"><span>저장</span><b>이 브라우저에 자동 저장</b></div>
+            <div class="info-row"><span>저장</span><b id="space-save">내 계정에 자동 저장</b></div>
           </div>
           <div class="info-card">
             <div class="info-title">손님에게 보이는 분위기</div>
@@ -204,6 +205,13 @@
 
         <!-- 관리 -->
         <div class="pane hidden" data-pane="manage">
+          <div class="info-card account-card">
+            <div class="info-title">내 계정</div>
+            <div class="info-row"><span>별명</span><b id="acc-name">-</b></div>
+            <div class="info-row"><span>이메일</span><b id="acc-email">-</b></div>
+            <p class="pane-note">다른 컴퓨터나 휴대폰에서도 같은 이메일로 로그인하면 내 섬이 그대로 나와요.</p>
+            <button id="btn-logout" class="wide-btn"><i data-icon="close"></i>로그아웃</button>
+          </div>
           <button id="btn-sound2" class="wide-btn"><i data-icon="soundOn"></i><span>소리 끄기</span></button>
           <button id="btn-help2" class="wide-btn"><i data-icon="help"></i>조작법 보기</button>
           <button id="btn-reset" class="wide-btn danger"><i data-icon="reset"></i><span>섬을 처음 모습으로</span></button>
@@ -226,10 +234,34 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.40</span>
+      <span class="version" title="지금 보고 있는 버전">v0.41</span>
     </nav>
   </div>
 
+</div>
+
+
+<!-- 처음 화면: 로그인 · 가입 · 손님(유령)으로 구경하기 (v0.41) -->
+<div class="overlay auth-overlay hidden" id="auth">
+  <div class="card auth-card">
+    <div class="auth-brand"><i data-icon="island"></i><b>나의 작은 섬</b></div>
+    <p class="auth-sub" id="auth-sub">물 위에 뜬 작은 섬을 꾸미고, 친구와 산책해요</p>
+    <div class="auth-tabs" role="tablist">
+      <button id="tab-login" class="on" role="tab">로그인</button>
+      <button id="tab-signup" role="tab">처음이에요 (가입)</button>
+    </div>
+    <form id="auth-form" class="auth-form" autocomplete="on" novalidate>
+      <label class="auth-field"><span>이메일</span><input id="auth-email" type="email" autocomplete="email" placeholder="example@mail.com" maxlength="120"></label>
+      <label class="auth-field"><span>비밀번호</span><input id="auth-pw" type="password" autocomplete="current-password" placeholder="6자 이상" maxlength="72"></label>
+      <label class="auth-field signup-only hidden"><span>별명</span><input id="auth-nick" maxlength="10" placeholder="섬에서 보일 이름 (10자까지)"></label>
+      <p class="auth-msg hidden" id="auth-msg"></p>
+      <button id="auth-submit" class="main-btn auth-main" type="submit">로그인</button>
+    </form>
+    <div class="auth-or"><span>또는</span></div>
+    <button id="auth-ghost" class="main-btn subtle auth-ghost"><i data-icon="person"></i>손님으로 구경하기</button>
+    <p class="auth-note" id="auth-ghost-note">가입 없이 <b>유령 모습</b>으로 광장을 둘러봐요. 말하기와 꾸미기는 가입하면 할 수 있어요.</p>
+    <button id="auth-close" class="auth-close hidden" title="닫기"><i data-icon="close"></i></button>
+  </div>
 </div>
 
 <!-- 도움말 -->
@@ -250,7 +282,7 @@
       <li><b>채팅</b> <kbd>Enter</kbd>로 입력줄을 열고 말을 쓰면 머리 위에 말풍선이 떠요</li>
       <li><b>사진</b> 위쪽 사진 버튼</li>
     </ul>
-    <p class="muted">꾸민 섬은 이 브라우저에 자동으로 저장돼요. 다른 컴퓨터나 다른 브라우저에서는 처음 모습으로 보여요.</p>
+    <p class="muted">꾸민 섬은 내 계정에 자동으로 저장돼요. 다른 컴퓨터나 휴대폰에서도 같은 이메일로 로그인하면 그대로 나와요.</p>
     <button id="btn-help-close" class="main-btn">시작하기</button>
   </div>
 </div>
@@ -282,6 +314,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.40"></script>
+<script type="module" src="js/main.js?v=0.41"></script>
 </body>
 </html>

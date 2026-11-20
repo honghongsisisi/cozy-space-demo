@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.40';
-import { PRESETS } from './chat.js?v=0.40';
-import { openLink, netConfigured } from './net.js?v=0.40';
+import { Avatar } from './avatar.js?v=0.41';
+import { PRESETS } from './chat.js?v=0.41';
+import { openLink, netConfigured } from './net.js?v=0.41';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -41,8 +41,9 @@ const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export class Party {
-  constructor({ scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, getInside, view, onWorld, onPeople, toast }) {
+  constructor({ scene, camera, viewport, avatar, chat, roomId, role, ghost, getName, getWorld, getInside, view, onWorld, onPeople, toast }) {
     Object.assign(this, { scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast });
+    this.ghost = !!ghost; // 가입하지 않은 손님(유령)인지. 친구 화면에도 유령 모습으로 보여요
     this.getInside = getInside || (() => false); // 내가 집 안에 있는지
     // 친구 자리(친구 기준)를 내 화면 자리로 바꾸기. null이면 안 보임 (친구는 집 안, 나는 마당 → 지붕에 가려짐)
     this.view = view || ((x, z, f, pin) => (pin === this.getInside() ? { x, z, f } : null));
@@ -97,7 +98,7 @@ export class Party {
 
   send(msg) {
     if (!this.link || !this.connected) return;
-    this.link.send({ ...msg, id: this.id, name: this.getName(), role: this.role });
+    this.link.send({ ...msg, id: this.id, name: this.getName(), role: this.role, g: this.ghost ? 1 : 0 });
   }
 
   sayHi() { this.send({ t: 'hi' }); this.sendState(true); }
@@ -141,6 +142,7 @@ export class Party {
       if (this.role === 'owner') this.sendWorld();
     }
     p.last = performance.now();
+    if (!!m.g !== p.ghost) { p.ghost = !!m.g; p.av.setGhost(p.ghost); this.peopleChanged(); }
     if (p.name !== name) { p.name = name; p.tag.textContent = name; this.peopleChanged(); }
     switch (m.t) {
       case 'hi':
@@ -157,6 +159,7 @@ export class Party {
         if (m.a === 'wave') p.av.wave();
         break;
       case 'chat': {
+        if (p.ghost) break; // 유령은 말할 수 없어요
         const text = String(m.text || '').slice(0, 80).trim();
         if (!text) break;
         const pr = PRESETS.find((x) => x.id === m.preset) || PRESETS[0];
@@ -185,7 +188,7 @@ export class Party {
     const tag = this.makeTag(false, role === 'owner');
     tag.textContent = name;
     tag.style.display = 'none';
-    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false, inside: false };
+    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false, inside: false, ghost: false };
     this.peers.set(id, p);
     if (role === 'owner') this.ownerHere = true;
     if (this.role !== 'visitor' || this.peers.size < 8) this.toast(this.role === 'visitor' ? `${name}님이 광장에 왔어요` : role === 'owner' && this.role === 'guest' ? `${name}님의 섬에 들어왔어요` : `${name}님이 놀러 왔어요`);
@@ -210,7 +213,7 @@ export class Party {
   }
 
   peopleChanged() {
-    const list = [{ name: this.getName(), role: this.role, me: true }, ...[...this.peers.values()].map((p) => ({ name: p.name, role: p.role }))];
+    const list = [{ name: this.getName(), role: this.role, me: true, ghost: this.ghost }, ...[...this.peers.values()].map((p) => ({ name: p.name, role: p.role, ghost: p.ghost }))];
     this.onPeople(list);
   }
 
