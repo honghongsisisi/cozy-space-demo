@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.29';
-import { Avatar } from './avatar.js?v=0.29';
-import { Environment } from './environment.js?v=0.29';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.29';
-import { saveState, loadState } from './storage.js?v=0.29';
-import { Sound } from './sound.js?v=0.29';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.29';
-import { fmt } from './realtime.js?v=0.29';
-import { icon, fillIcons } from './icons.js?v=0.29';
-import { makeThumbnails } from './thumbs.js?v=0.29';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.29';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.30';
+import { Avatar } from './avatar.js?v=0.30';
+import { Environment } from './environment.js?v=0.30';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.30';
+import { saveState, loadState } from './storage.js?v=0.30';
+import { Sound } from './sound.js?v=0.30';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.30';
+import { fmt } from './realtime.js?v=0.30';
+import { icon, fillIcons } from './icons.js?v=0.30';
+import { makeThumbnails } from './thumbs.js?v=0.30';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.30';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -880,6 +880,7 @@ const myNameInput = document.getElementById('my-name');
 const inviteInput = document.getElementById('invite-link');
 const fadeEl = document.getElementById('fade');
 const goBtn = document.getElementById('btn-go');
+const goHomeBtn = document.getElementById('btn-go-home');
 const inviteLink = () => `${location.origin}${location.pathname}?visit=${MY_ROOM}`;
 const nameOr = () => myName || (space === 'visit' ? '손님' : space === 'plaza' ? '나그네' : '섬 주인');
 
@@ -935,8 +936,9 @@ function stopParty() {
 function refreshSpaceUI() {
   document.getElementById('guest-card').classList.toggle('hidden', space !== 'visit');
   document.getElementById('plaza-card').classList.toggle('hidden', space !== 'plaza');
-  goBtn.innerHTML = space === 'plaza' ? `${icon('home')}<span>우리 집 가기</span>` : `${icon('plaza')}<span>광장 가기</span>`;
-  goBtn.title = space === 'plaza' ? '내 섬으로 돌아가요' : '누구나 모이는 광장으로 가요';
+  // 우리 집 가기: 내 섬이 아닐 때 (광장·친구 섬) / 광장 가기: 광장이 아닐 때 (내 섬·친구 섬)
+  goHomeBtn.classList.toggle('hidden', space === 'home');
+  goBtn.classList.toggle('hidden', space === 'plaza');
   resetLabel.textContent = resetName();
   document.body.dataset.space = space;
 }
@@ -1003,7 +1005,6 @@ function moveTo(dest) {
         avatar.restore({ x: (Math.random() - 0.5) * 2.4, z: 9.5 + Math.random() * 1.5, facing: Math.PI });
       } else {
         loadHome();
-        if (location.search) history.replaceState(null, '', location.pathname); // 초대 링크 주소 지우기
       }
       avatar.target = null;
       setRole(dest === 'home' ? 'owner' : 'guest');
@@ -1017,13 +1018,19 @@ function moveTo(dest) {
   };
   if (dest === 'plaza') askName('광장에 가요', go); else go();
 }
-goBtn.addEventListener('click', () => moveTo(space === 'plaza' ? 'home' : 'plaza'));
+goBtn.addEventListener('click', () => moveTo('plaza'));
+goHomeBtn.addEventListener('click', () => moveTo('home'));
 document.getElementById('btn-home').addEventListener('click', (e) => { e.preventDefault(); moveTo('home'); });
 
 refreshSpaceUI();
 if (space === 'visit') {
   if (!netConfigured()) { document.getElementById('join-off').classList.remove('hidden'); document.getElementById('btn-join').disabled = true; }
-  askName('친구 섬에 놀러 가요', () => { joinedAt = performance.now(); startParty(); }, true);
+  askName('친구 섬에 놀러 가요', () => {
+    joinedAt = performance.now(); startParty();
+    // 주소창에서 초대 링크 부분을 지움: 새로 고침하거나 다음에 열면 늘 내 섬에서 시작하도록
+    const q = new URLSearchParams(location.search); q.delete('visit');
+    history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : ''));
+  }, true);
 } else {
   startParty();
 }
