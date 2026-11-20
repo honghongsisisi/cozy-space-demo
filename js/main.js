@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.34';
-import { Avatar } from './avatar.js?v=0.34';
-import { Environment } from './environment.js?v=0.34';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.34';
-import { saveState, loadState } from './storage.js?v=0.34';
-import { Sound } from './sound.js?v=0.34';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.34';
-import { fmt } from './realtime.js?v=0.34';
-import { icon, fillIcons } from './icons.js?v=0.34';
-import { makeThumbnails } from './thumbs.js?v=0.34';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.34';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.35';
+import { Avatar } from './avatar.js?v=0.35';
+import { Environment } from './environment.js?v=0.35';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.35';
+import { saveState, loadState } from './storage.js?v=0.35';
+import { Sound } from './sound.js?v=0.35';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.35';
+import { fmt } from './realtime.js?v=0.35';
+import { icon, fillIcons } from './icons.js?v=0.35';
+import { makeThumbnails } from './thumbs.js?v=0.35';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.35';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -119,7 +119,7 @@ function loadHome() {
     if (saved.title) roomTitle = saved.title;
     world.apply({ type: 'replaceAll', items: saved.items || [] }, { silent: true });
     env.restore(saved.env);
-    avatar.restore(saved.avatar);
+    avatar.restore({ x: 0, z: 0, facing: 0 }); // 켤 때는 언제나 마당 가운데에서 시작 (마지막 자리 말고)
     if (saved.cam) Object.assign(cam, { yaw: saved.cam.yaw, pitch: saved.cam.pitch, dist: saved.cam.dist });
   } else {
     world.apply({ type: 'replaceAll', items: DEFAULT_ITEMS }, { silent: true });
@@ -296,13 +296,18 @@ function handleClick(e) {
     select(pickItem(e));
     return;
   }
-  // 집(또는 집 안 문)을 누르면 문 앞으로 걸어가서 들어가요/나가요
-  // 집 안에서: 문 근처 바닥이나 방 밖 마당을 누르면 문으로 걸어 나가요
-  if (inside && !leaving) {
+  route.length = 0;
+  // 집 안에서 마당을 누르면: 문까지 걸어가 밖으로 나간 뒤 그 자리까지 이어서 걸어가요 (따로 나가는 버튼 없이)
+  if (inside) {
     const fp = groundPoint(e);
-    let outsideHit = false;
-    if (!fp) { setNdc(e); outsideHit = !!raycaster.intersectObject(world.islandTop, false)[0]; }
-    if (outsideHit || (fp && fp.z > ROOM_D / 2 - 0.9 && Math.abs(fp.x) < 1.3)) { walkOut(); return; }
+    if (!fp) {
+      setNdc(e);
+      const hit = raycaster.intersectObject(world.islandTop, false)[0];
+      if (hit) {
+        const out = hit.point.z > ROOM_D / 2 || Math.abs(hit.point.x) > ROOM_W / 2 || hit.point.z < -ROOM_D / 2;
+        if (out) { walkOut(clampToPlotLocal(hit.point.x, hit.point.z)); markAt(hit.point.x, hit.point.z); return; }
+      }
+    } else if (fp.z > ROOM_D / 2 - 0.9 && Math.abs(fp.x) < 1.3) { walkOut(); markAt(0, ROOM_D / 2 + 1.3); return; }
   }
   const door = clickedDoor(e);
   if (door) {
@@ -952,7 +957,6 @@ function refreshSpaceUI() {
   goBtn.innerHTML = space === 'plaza' ? `${icon('home')}<span>우리 집 가기</span>` : `${icon('plaza')}<span>광장 가기</span>`;
   goBtn.title = space === 'plaza' ? '내 섬으로 돌아가요' : '누구나 모이는 광장으로 가요';
   resetLabel.textContent = resetName();
-  document.getElementById('btn-exit-house').classList.toggle('hidden', !inside); // 집 안에서만 '마당으로 나가기'
   document.body.dataset.space = space;
 }
 
@@ -1103,7 +1107,6 @@ function enterHouse(door) {
   refreshGridBtn(); showTitle(); refreshSpaceUI();
   if (currentPane === 'space') refreshSpaceInfo();
   if (party) { party.frameChanged(); party.sendState(true); }
-  toast('집 안에 들어왔어요');
 }
 // 지붕이 다 덮이면 마당으로 (집 기준 자리 → 마당 자리)
 function finishExit() {
@@ -1117,6 +1120,8 @@ function finishExit() {
   const t = avatar.target ? world.toYard(avatar.target.x, avatar.target.y) : null;
   avatar.restore({ x: wp.x, z: wp.z, facing: f + a });
   if (t) avatar.moveTo(t.x, t.z);
+  route.forEach((q, i) => { route[i] = world.toYard(q.x, q.z); }); // 남은 걸음도 마당 자리로
+  if (marker.visible) { const m = world.toYard(marker.position.x, marker.position.z); marker.position.set(m.x, 0.03, m.z); }
   stopPlacing(true); select(null); setHover(null);
   undoStack.length = 0; redoStack.length = 0; refreshHistory();
   doorArmed = false;
@@ -1127,18 +1132,26 @@ function finishExit() {
 }
 // 집 안에서 바로 다른 곳(광장 등)으로 떠날 때: 지붕을 기다리지 않고 곧장 마당 상태로
 function leaveHouseNow() { if (inside) finishExit(); }
-// 문으로 걸어 나가기: 먼저 문 안쪽 앞으로 갔다가, 문을 지나 밖으로 (벽에 막히지 않게 두 번에 나눠 걸음)
-let exitPlan = false;
-function walkOut() {
+// 문으로 걸어 나가기: (필요하면) 문 안쪽 앞 → 문 밖 → 누른 마당 자리. 벽에 막히지 않게 나눠서 걸어요
+// route: 다음에 걸어갈 자리들 (지금 쓰는 자리 기준). 집을 드나들면 자리 기준도 같이 바꿔 줌
+const route = [];
+function walkOut(final) {
   if (!inside) return;
   const p = avatar.position;
   avatar.running = false;
-  if (Math.abs(p.x) < 0.5 && p.z > ROOM_D / 2 - 1.2) avatar.moveTo(0, ROOM_D / 2 + 1.3);
-  else { avatar.moveTo(0, ROOM_D / 2 - 0.9); exitPlan = true; }
-  marker.position.set(0, 0.03, ROOM_D / 2 - 0.5); marker.visible = true; markerT = 1;
+  route.length = 0;
+  if (!(Math.abs(p.x) < 0.5 && p.z > ROOM_D / 2 - 1.2)) route.push({ x: 0, z: ROOM_D / 2 - 0.9 });
+  route.push({ x: 0, z: ROOM_D / 2 + 1.3 });
+  if (final) route.push(final);
+  const q = route.shift();
+  avatar.moveTo(q.x, q.z);
 }
-const btnExit = document.getElementById('btn-exit-house');
-btnExit.addEventListener('click', walkOut);
+// 집 안 기준 자리에서 본 마당 자리를 섬 밖으로 나가지 않게
+function clampToPlotLocal(x, z) {
+  const y = world.toYard(x, z), c = clampToPlot(y.x, y.z);
+  return world.toLocal(c.x, c.z);
+}
+function markAt(x, z) { marker.position.set(x, 0.03, z); marker.visible = true; markerT = 1; }
 // 다른 데서 부르는 이름 (시험용)
 function goThroughDoor(door) { if (!inside) enterHouse(door || world.doors()[0]); else walkOut(); }
 
@@ -1147,16 +1160,11 @@ function checkDoors() {
   if (space === 'plaza' || moving) return;
   const p = avatar.position;
   if (inside) {
-    // '나가기' 첫 걸음(문 안쪽 앞)에 닿으면 이어서 문 밖으로
-    if (exitPlan) {
-      if (!avatar.target) exitPlan = false;
-      else if (Math.hypot(p.x, p.z - (ROOM_D / 2 - 0.9)) < 0.35) { exitPlan = false; avatar.moveTo(0, ROOM_D / 2 + 1.3); }
-    }
     // 문 밖으로 나가면 지붕을 다시 덮고, 다 덮이면 마당으로
     const outside = p.z > ROOM_D / 2 + 0.35;
     if (!leaving && outside && doorArmed) {
       leaving = true; world.closing = true;
-      if (!avatar.target || avatar.target.y < ROOM_D / 2 + 1.0) avatar.moveTo(0, ROOM_D / 2 + 1.3);
+      if (!avatar.target) avatar.moveTo(0, ROOM_D / 2 + 1.3); // 문을 막 지나면 몇 걸음 더 나가요
     }
     if (leaving && !outside) { leaving = false; world.closing = false; } // 다시 들어오면 그대로 집 안
     if (!outside) doorArmed = true;
@@ -1204,6 +1212,12 @@ function frame() {
   world.update(dt);
   updateCamera(dt);
   world.updateWalls(dt, camera.position);
+  // 이어 걷기: 지금 걸음이 끝나면 다음 자리로. 키보드로 움직이면 그만
+  if (route.length) {
+    const mi = moveInput();
+    if (mi.x || mi.y) route.length = 0;
+    else if (!avatar.target) { const q = route.shift(); avatar.moveTo(q.x, q.z); }
+  }
   checkDoors();
   env.update(dt, avatar.position);
   if (env.flowing) refreshEnvButtons();
