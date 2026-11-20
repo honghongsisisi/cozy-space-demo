@@ -388,3 +388,10 @@ body[data-space="plaza"] .room-title-input, body[data-space="plaza"] #btn-title-
   .room-nav .btn-go.hidden { display: none; }
   .room-nav .btn-go { padding: 4px 9px; font-size: 12.5px; }
 }
+
+/* 물건 개수 (v0.40): 카드 오른쪽 아래 '쓴 개수/가진 개수', 다 쓴 카드는 흐리게 */
+.item-card { position: relative; }
+.item-card .stock { position: absolute; right: 5px; bottom: 3px; font-size: 9.5px; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.item-card > span:not(.stock) { padding-bottom: 6px; }
+.item-card.full { opacity: 0.42; cursor: not-allowed; }
+.item-card.full:hover { border-color: var(--line); }

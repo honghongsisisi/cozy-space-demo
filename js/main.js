@@ -1,15 +1,16 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.39';
-import { Avatar } from './avatar.js?v=0.39';
-import { Environment } from './environment.js?v=0.39';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.39';
-import { saveState, loadState } from './storage.js?v=0.39';
-import { Sound } from './sound.js?v=0.39';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.39';
-import { fmt } from './realtime.js?v=0.39';
-import { icon, fillIcons } from './icons.js?v=0.39';
-import { makeThumbnails } from './thumbs.js?v=0.39';
-import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.39';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.40';
+import { Avatar } from './avatar.js?v=0.40';
+import { Environment } from './environment.js?v=0.40';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.40';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.40';
+import { saveState, loadState } from './storage.js?v=0.40';
+import { Sound } from './sound.js?v=0.40';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.40';
+import { fmt } from './realtime.js?v=0.40';
+import { icon, fillIcons } from './icons.js?v=0.40';
+import { makeThumbnails } from './thumbs.js?v=0.40';
+import { Party, myRoomId, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.40';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -91,6 +92,7 @@ function currentState() {
     title: roomTitle,
     items: yardList(),
     house: { items: houseList() },
+    inventory: { owned: serializeOwned() }, // 가진 물건 개수 (나중에 상점에서 늘어남)
     env: env.serialize(),
     avatar: inside && yardBack ? yardBack.avatar : avatar.serialize(),
     cam: { yaw: inside && world.houseT ? cam.yaw + world.houseT.a : cam.yaw, pitch: cam.pitch, dist: cam.dist },
@@ -114,6 +116,7 @@ let roomTitle = '나의 작은 섬';
 function loadHome() {
   const saved = loadState();
   roomTitle = '나의 작은 섬';
+  restoreOwned(saved && saved.inventory && saved.inventory.owned);
   houseItems = saved && saved.house ? saved.house.items.map((i) => ({ ...i, ...clampToRoom(i.x, i.z, 0.3) })) : DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
   if (saved) {
     if (saved.title) roomTitle = saved.title;
@@ -416,12 +419,28 @@ ITEM_GROUPS.forEach((g) => {
     b.className = 'item-card';
     b.dataset.type = it.type;
     b.title = it.name;
-    b.innerHTML = THUMBS[it.type] ? `<img class="thumb" alt="" src="${THUMBS[it.type]}"><span>${it.name}</span>` : `<span class="thumb"></span><span>${it.name}</span>`;
+    b.innerHTML = (THUMBS[it.type] ? `<img class="thumb" alt="" src="${THUMBS[it.type]}"><span>${it.name}</span>` : `<span class="thumb"></span><span>${it.name}</span>`) + '<span class="stock"></span>';
     b.addEventListener('click', () => startPlacing(it.type));
     grid.appendChild(b);
   });
   folders.appendChild(f);
 });
+
+// ---------- 물건 개수: 카드 오른쪽 아래 '쓴 개수/가진 개수' ----------
+// 마당과 집 안에 놓인 물건을 모두 세요. 다 쓴 물건 카드는 흐려지고 더 놓을 수 없어요.
+const usedNow = () => countUsed([yardList(), houseList()]);
+function isFull(type) { return (usedNow()[type] || 0) >= ownedOf(type); }
+function refreshStock() {
+  const used = usedNow();
+  folders.querySelectorAll('.item-card').forEach((c) => {
+    const t = c.dataset.type, u = used[t] || 0, n = ownedOf(t);
+    c.querySelector('.stock').textContent = `${u}/${n}`;
+    c.classList.toggle('full', u >= n);
+    c.title = u >= n ? `${ITEM_BY_TYPE[t].name} · 다 썼어요 (치우면 다시 놓을 수 있어요)` : `${ITEM_BY_TYPE[t].name} · ${n}개 중 ${u}개 놓음`;
+  });
+}
+world.onChange(refreshStock);
+refreshStock();
 
 function setDecorating(on) {
   decorating = on;
@@ -453,6 +472,7 @@ function openPanel(pane) {
   rail.querySelector('.rail-group').classList.toggle('open', isItem);
   railSub.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.sub === pane));
   setDecorating(pane === 'furniture');
+  if (pane === 'furniture') refreshStock();
 }
 rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -480,6 +500,7 @@ function makeGhost(type) {
 }
 
 function startPlacing(type, movingId = null, rot = 0) {
+  if (!movingId && isFull(type)) { toast(`${ITEM_BY_TYPE[type].name}: 다 썼어요. 하나 치우면 다시 놓을 수 있어요`); return; }
   stopPlacing(true);
   select(null);
   placing = { type, rot, movingId, ghost: makeGhost(type) };
@@ -526,8 +547,11 @@ function placeGhost() {
     stopPlacing(false);
     select(id);
   } else {
-    doAction({ type: 'add', item: { id: newId(), type: placing.type, x, z, rot: placing.rot } }, `${ITEM_BY_TYPE[placing.type].name} 놓기`);
-    // 같은 물건을 계속 놓을 수 있게 그대로 둠
+    const type = placing.type;
+    if (isFull(type)) { stopPlacing(true); toast(`${ITEM_BY_TYPE[type].name}: 다 썼어요`); return; }
+    doAction({ type: 'add', item: { id: newId(), type, x, z, rot: placing.rot } }, `${ITEM_BY_TYPE[type].name} 놓기`);
+    // 같은 물건을 계속 놓을 수 있게 그대로 둠 (다 쓰면 손에서 내려놓음)
+    if (isFull(type)) { stopPlacing(true); toast(`${ITEM_BY_TYPE[type].name}: 가진 만큼 모두 놓았어요`); }
   }
 }
 
@@ -1074,8 +1098,8 @@ if (!party) renderPeople([{ name: nameOr(), role, me: true }]);
 // 집 안에서는 '집 가운데 = (0,0)'인 집 기준 자리를 쓰고, 마당 전체를 그만큼 돌려 놓아요 (world.enterHouse).
 let doorArmed = false; // 방금 나온 문에 바로 다시 들어가지 않게, 문에서 조금 떨어져야 다시 켜짐
 let leaving = false;   // 집 밖으로 걸어 나가는 중 (지붕이 덮이는 중)
-const yardList = () => (inside ? [...world.yardMap.values()].map(({ data }) => ({ ...data })) : world.serialize());
-const houseList = () => (inside ? world.serialize() : houseItems);
+function yardList() { return inside ? [...world.yardMap.values()].map(({ data }) => ({ ...data })) : world.serialize(); }
+function houseList() { return inside ? world.serialize() : houseItems; }
 function frameCam(toLocal) {
   // 카메라도 같은 자리에서 같은 방향을 보도록 자리만 바꿔 줌 (화면이 튀지 않게)
   const t = toLocal ? world.toLocal(cam.target.x, cam.target.z) : world.toYard(cam.target.x, cam.target.z);
