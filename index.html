@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.44">
+  <link rel="stylesheet" href="style.css?v=0.45">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -245,6 +245,7 @@
             <div class="gb-write hidden" id="gb-write">
               <textarea id="gb-input" maxlength="100" rows="2" placeholder="섬 주인에게 한마디 남겨요 (100자까지)"></textarea>
               <div class="gb-write-foot"><span id="gb-left">0/100</span><button id="gb-send" class="btn btn-accent">남기기</button></div>
+              <p class="pane-note gb-msg hidden" id="gb-msg"></p>
             </div>
             <p class="pane-note hidden" id="gb-ghost-note">가입하면 방명록을 남길 수 있어요.</p>
             <div id="gb-list" class="gb-list"></div>
@@ -284,7 +285,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.44</span>
+      <span class="version" title="지금 보고 있는 버전">v0.45</span>
     </nav>
   </div>
 
@@ -364,6 +365,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.44"></script>
+<script type="module" src="js/main.js?v=0.45"></script>
 </body>
 </html>
