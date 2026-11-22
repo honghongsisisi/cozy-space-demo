@@ -2,6 +2,7 @@
 export const PALETTE = {
   plotGrass: 0xa6d488,   // 마당 잔디
   plotSide: 0xa98463,    // 섬 옆면 흙
+  sand: 0xe8d8b6,        // 섬 가장자리 모래 (낚시하는 바닷가, v0.48)
   wood: 0xb98a5e,
   woodDark: 0x8f6745,
   leaf: [0x8cc96b, 0x7dbd62, 0xa3d47c],
