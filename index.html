@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.42">
+  <link rel="stylesheet" href="style.css?v=0.43">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -187,7 +187,6 @@
             <label class="switch"><input type="checkbox" id="ghost-toggle" checked><span></span>가입하지 않은 손님(유령)도 구경 오기</label>
             <p class="pane-note">유령은 둥둥 떠다니며 구경만 해요. 말하기·방명록·물건 건드리기는 안 되고, 한 섬에 5명까지 들어와요.</p>
           </div>
-          <button class="wide-btn" id="btn-gb-open"><i data-icon="book"></i>방명록 보기</button>
           <button class="wide-btn soon" data-soon="섬 넓히기"><i data-icon="compass"></i>섬 넓히기 <em>준비 중</em></button>
         </div>
 
@@ -214,15 +213,6 @@
             <div class="info-title">광장에 있어요</div>
             <p class="pane-note">누구나 오가며 만나는 곳이에요. 벤치에 모여 이야기 나눠요. 위쪽 '우리 집 가기'로 언제든 내 섬에 돌아가요.</p>
           </div>
-          <div class="info-card hidden" id="gb-card">
-            <div class="info-title" id="gb-title">방명록</div>
-            <div class="gb-write hidden" id="gb-write">
-              <textarea id="gb-input" maxlength="100" rows="2" placeholder="섬 주인에게 한마디 남겨요 (100자까지)"></textarea>
-              <div class="gb-write-foot"><span id="gb-left">0/100</span><button id="gb-send" class="btn btn-accent">남기기</button></div>
-            </div>
-            <p class="pane-note hidden" id="gb-ghost-note">가입하면 방명록을 남길 수 있어요.</p>
-            <div id="gb-list" class="gb-list"></div>
-          </div>
           <div class="info-card hidden" id="recent-card">
             <div class="info-title">다녀온 섬</div>
             <div id="recent-list" class="recent-list"></div>
@@ -248,6 +238,20 @@
           <p class="pane-note hidden" id="net-off">친구 초대는 서버 연결을 마친 뒤에 쓸 수 있어요. (준비 중)</p>
         </div>
 
+        <!-- 방명록 (v0.43: 오른쪽 메뉴로 따로. 마당의 우체통을 눌러도 열려요) -->
+        <div class="pane hidden" data-pane="guestbook">
+          <div class="info-card gb-card hidden" id="gb-card">
+            <div class="info-title" id="gb-title">방명록</div>
+            <div class="gb-write hidden" id="gb-write">
+              <textarea id="gb-input" maxlength="100" rows="2" placeholder="섬 주인에게 한마디 남겨요 (100자까지)"></textarea>
+              <div class="gb-write-foot"><span id="gb-left">0/100</span><button id="gb-send" class="btn btn-accent">남기기</button></div>
+            </div>
+            <p class="pane-note hidden" id="gb-ghost-note">가입하면 방명록을 남길 수 있어요.</p>
+            <div id="gb-list" class="gb-list"></div>
+          </div>
+          <p class="pane-note">섬에 놓인 우체통을 눌러도 방명록이 열려요.</p>
+        </div>
+
         <!-- 관리 -->
         <div class="pane hidden" data-pane="manage">
           <div class="info-card account-card">
@@ -270,6 +274,7 @@
     <nav class="rail" id="rail">
       <button class="rail-btn" data-cat="space"><i data-icon="island"></i>내 공간</button>
       <button class="rail-btn" data-cat="friends"><i data-icon="friends"></i>친구</button>
+      <button class="rail-btn" data-cat="guestbook"><i data-icon="book"></i>방명록</button>
       <div class="rail-group">
         <button class="rail-btn" data-cat="items"><i data-icon="box"></i>아이템</button>
         <div class="rail-sub" id="rail-sub">
@@ -279,7 +284,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.42</span>
+      <span class="version" title="지금 보고 있는 버전">v0.43</span>
     </nav>
   </div>
 
@@ -359,6 +364,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.42"></script>
+<script type="module" src="js/main.js?v=0.43"></script>
 </body>
 </html>

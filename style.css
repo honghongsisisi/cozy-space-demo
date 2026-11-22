@@ -478,3 +478,7 @@ body.ghost .account-only { display: none; }
 .peer-head .icon-btn { margin-left: auto; }
 .peer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .peer-actions .btn { flex: 1; justify-content: center; white-space: nowrap; }
+
+/* 방명록을 오른쪽 메뉴로 (v0.43) */
+body[data-space="plaza"] .rail-btn[data-cat="guestbook"] { display: none; }
+.pane[data-pane="guestbook"] .gb-list { max-height: none; }

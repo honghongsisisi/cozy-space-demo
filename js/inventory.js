@@ -2,7 +2,7 @@
 // 원리: 물건마다 '가진 개수'만 적어 두고, '쓴 개수'는 마당과 집 안에 놓인 물건을 그때그때 세어서 알아내요.
 // 그래서 치우거나 되돌리면 저절로 다시 쓸 수 있게 돼요.
 // 나중에 상점이 생기면 addOwned(type, n)으로 가진 개수만 늘려 주면 됩니다.
-import { ITEMS, ITEM_GROUPS } from './catalog.js?v=0.42';
+import { ITEMS, ITEM_GROUPS } from './catalog.js?v=0.43';
 
 export const START_COUNT = 20; // 지금은 물건마다 20개씩 가지고 시작
 
