@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.43';
-import { Avatar } from './avatar.js?v=0.43';
-import { Environment } from './environment.js?v=0.43';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.43';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.43';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.43';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.43';
-import { Sound } from './sound.js?v=0.43';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.43';
-import { fmt } from './realtime.js?v=0.43';
-import { icon, fillIcons } from './icons.js?v=0.43';
-import { makeThumbnails } from './thumbs.js?v=0.43';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.43';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.44';
+import { Avatar } from './avatar.js?v=0.44';
+import { Environment } from './environment.js?v=0.44';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.44';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.44';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.44';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.44';
+import { Sound } from './sound.js?v=0.44';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.44';
+import { fmt } from './realtime.js?v=0.44';
+import { icon, fillIcons } from './icons.js?v=0.44';
+import { makeThumbnails } from './thumbs.js?v=0.44';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.44';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1271,7 +1271,9 @@ async function gbRefresh() {
   gbCard.classList.toggle('hidden', !room);
   if (!room) return;
   document.getElementById('gb-title').textContent = space === 'home' ? '내 섬 방명록' : `${roomTitle} 방명록`;
-  document.getElementById('gb-write').classList.toggle('hidden', space !== 'visit' || ghost);
+  // 손님도, 섬 주인도 쓸 수 있어요 (v0.44). 유령은 읽기만
+  document.getElementById('gb-write').classList.toggle('hidden', ghost || !account);
+  gbInput.placeholder = space === 'home' ? '놀러 올 친구들에게 한마디 남겨요 (100자까지)' : '섬 주인에게 한마디 남겨요 (100자까지)';
   document.getElementById('gb-ghost-note').classList.toggle('hidden', space !== 'visit' || !ghost);
   if (gbShownFor !== room) gbList.innerHTML = '<div class="gb-empty">불러오는 중…</div>';
   let rows;
@@ -1307,9 +1309,10 @@ let gbBusy = false;
 async function gbWrite() {
   const body = gbInput.value.replace(/\s+/g, ' ').trim();
   if (!body) { toast('남길 말을 적어 주세요'); gbInput.focus(); return; }
-  if (gbBusy || space !== 'visit' || ghost) return;
+  const room = gbRoom();
+  if (gbBusy || !room || ghost || !account) return;
   gbBusy = true; gbSend.disabled = true;
-  const r = await guestbookWrite(visitId, body, nameOr());
+  const r = await guestbookWrite(room, body, nameOr());
   gbBusy = false; gbSend.disabled = false;
   if (r.error) { toast(r.error); return; }
   gbInput.value = ''; gbLeft();
