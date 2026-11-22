@@ -1,18 +1,18 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.50';
-import { Avatar } from './avatar.js?v=0.50';
-import { Environment } from './environment.js?v=0.50';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.50';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.50';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.50';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.50';
-import { Sound } from './sound.js?v=0.50';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.50';
-import { fmt } from './realtime.js?v=0.50';
-import { icon, fillIcons } from './icons.js?v=0.50';
-import { makeThumbnails } from './thumbs.js?v=0.50';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.50';
-import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.50';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.51';
+import { Avatar } from './avatar.js?v=0.51';
+import { Environment } from './environment.js?v=0.51';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.51';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.51';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.51';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.51';
+import { Sound } from './sound.js?v=0.51';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.51';
+import { fmt } from './realtime.js?v=0.51';
+import { icon, fillIcons } from './icons.js?v=0.51';
+import { makeThumbnails } from './thumbs.js?v=0.51';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.51';
+import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.51';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -272,6 +272,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   drag = { x: e.clientX, y: e.clientY, moved: false, button: e.button };
+  startPress(e);
 });
 canvas.addEventListener('pointermove', (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -284,7 +285,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (drag) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (!drag.moved && Math.hypot(dx, dy) > 6) drag.moved = true;
+    if (!drag.moved && Math.hypot(dx, dy) > 6) { drag.moved = true; cancelPress(); }
     if (drag.moved) {
       cam.yaw -= dx * 0.006;
       cam.pitch = Math.max(0.12, Math.min(1.35, cam.pitch + dy * 0.004));
@@ -298,9 +299,53 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerup', (e) => {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinchDist = 0;
-  if (drag && !drag.moved && drag.button === 0) handleClick(e);
+  const fired = press && press.fired;
+  cancelPress();
+  if (drag && !drag.moved && !fired) {
+    if (drag.button === 0) handleClick(e);
+    else if (drag.button === 2) longPress(e); // PC: 마우스 오른쪽 클릭이면 길게 누른 것처럼 바로
+  }
   drag = null;
 });
+canvas.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); cancelPress(); drag = null; });
+
+// ---------- 길게 누르기 (v0.51) ----------
+// 가구(의자·침대·책장·창문)나 바다를 0.5초 꾹 누르면 고르기 창이 떠요. 한 번 누르면 예전처럼 그냥 걸어가요.
+// 누르는 동안 손가락 자리에 작은 동그라미가 차올라서 '길게 누르는 중'인 걸 알 수 있어요.
+// 쓸 수 있는 게 없는 곳(그냥 땅)에서는 동그라미도 안 떠요.
+const PRESS_MS = 500;
+const pressRing = document.getElementById('press-ring');
+let press = null; // { timer, showT, fired }
+function pressTarget(e) {
+  if (placing || decorating) return false;
+  if (fishing && fishing.active) return false;
+  if (pickUse(e)) return true;
+  return !inside && !!seaPoint(e) && !groundPoint(e) && canFishHere();
+}
+function startPress(e) {
+  cancelPress();
+  if (e.button !== 0 || pointers.size !== 1 || !pressTarget(e)) return;
+  const r = viewport.getBoundingClientRect();
+  const ev = { clientX: e.clientX, clientY: e.clientY };
+  press = { fired: false };
+  pressRing.style.left = `${e.clientX - r.left}px`; pressRing.style.top = `${e.clientY - r.top}px`;
+  press.showT = setTimeout(() => { pressRing.classList.remove('hidden'); requestAnimationFrame(() => pressRing.classList.add('fill')); }, 120); // 짧게 누를 땐 안 보이게
+  press.timer = setTimeout(() => { if (!press) return; press.fired = true; hideRing(); longPress(ev); }, PRESS_MS);
+}
+function hideRing() { pressRing.classList.add('hidden'); pressRing.classList.remove('fill'); }
+function cancelPress() {
+  if (press) { clearTimeout(press.timer); clearTimeout(press.showT); press = null; }
+  hideRing();
+}
+function longPress(e) {
+  if (placing || decorating) return;
+  hideSeaMenu(); hideUseCard();
+  const u = pickUse(e);
+  if (u) { showUseCard(u); return; }
+  if (inside || groundPoint(e)) return;
+  const sp = seaPoint(e);
+  if (sp && canFishHere()) openSeaMenu(e, sp);
+}
 canvas.addEventListener('pointerleave', () => setHover(null));
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY * 0.01); }, { passive: false });
 function zoom(d) { cam.dist = Math.max(4, Math.min(44, cam.dist + d)); }
@@ -379,9 +424,7 @@ function handleClick(e) {
   if (party) { setNdc(e); const pp = party.pickPeer(raycaster); if (pp) { showPeerCard(pp); return; } }
   // 우체통을 누르면 방명록 (v0.43)
   if (space !== 'plaza' && clickedType(e) === 'mailbox') { openPanel('guestbook'); return; }
-  // 의자·침대·책장·창문을 누르면 '사용하기' 카드 (v0.49)
-  const u = pickUse(e);
-  if (u) { showUseCard(u); return; }
+  // 의자·침대·책장·창문의 '사용하기'는 길게 누르기 / 오른쪽 클릭으로 (v0.51). 한 번 누르면 그냥 걸어가요
   hideUseCard();
   pendingUse = null;
   if (avatar.pose) standUp();
@@ -408,7 +451,7 @@ function handleClick(e) {
   }
   const p = groundPoint(e);
   if (p) goTo(clampPos(p.x, p.z), e, 0.03);
-  else if (!inside) { const sp = seaPoint(e); if (sp) clickSea(e, sp); } // 섬 밖 바다를 누름 (v0.48)
+  else if (!inside) { const sp = seaPoint(e); if (sp) goTo(clampToSea(sp.x, sp.z), e, WATER_Y + 0.05); } // 바다를 한 번 누르면 헤엄쳐 가기. 낚시 고르기 창은 길게 누르기 (v0.51)
 }
 // 누른 자리로 걸어가기 (빠르게 두 번 누르면 달려감)
 function goTo(c, e, y) {
@@ -432,10 +475,8 @@ function seaPoint(e) {
 // 땅에 서서 바다를 누르면 작은 고르기 창: 낚시하기 / 헤엄쳐 가기 (내 섬에서만 낚시. 헤엄은 어디서나)
 const seaMenu = document.getElementById('sea-menu');
 let seaSpot = null, seaEvt = null, fishGoal = null;
-function clickSea(e, sp) {
-  const c = clampToSea(sp.x, sp.z);
-  const canFish = space === 'home' && !ghost && !avatar.swimming && !avatar.hop;
-  if (!canFish) { goTo(c, e, WATER_Y + 0.05); return; }
+const canFishHere = () => space === 'home' && !ghost && !avatar.swimming && !avatar.hop;
+function openSeaMenu(e, sp) {
   seaSpot = { x: sp.x, z: sp.z }; seaEvt = { clientX: e.clientX, clientY: e.clientY };
   const r = viewport.getBoundingClientRect();
   seaMenu.style.left = `${Math.min(r.width - 90, Math.max(90, e.clientX - r.left))}px`;

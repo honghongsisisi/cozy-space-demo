@@ -538,3 +538,10 @@ body[data-space="plaza"] .rail-btn[data-cat="guestbook"] { display: none; }
 .dex-cell small { color: var(--muted); font-size: 10.5px; line-height: 1.3; }
 .dex-cell.unknown b { color: var(--muted); }
 .sea-menu .btn-accent .ico, .fish-actions .btn-accent .ico { color: #fff; }
+
+/* 길게 누르는 동안 차오르는 동그라미 (v0.51): 0.12초 뒤 나타나 0.38초 동안 천천히 채워져요 */
+.press-ring { position: absolute; z-index: 6; width: 44px; height: 44px; transform: translate(-50%, -50%) rotate(-90deg); pointer-events: none; }
+.press-ring circle { fill: none; stroke-width: 4; }
+.press-ring .pr-bg { stroke: rgba(255, 253, 249, 0.75); }
+.press-ring .pr-fill { stroke: #a07e66; stroke-linecap: round; stroke-dasharray: 107; stroke-dashoffset: 107; }
+.press-ring.fill .pr-fill { stroke-dashoffset: 0; transition: stroke-dashoffset 0.38s linear; }

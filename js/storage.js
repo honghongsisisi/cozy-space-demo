@@ -2,7 +2,7 @@
 // v0.41부터: 로그인한 사람마다 따로 칸을 써요(같은 컴퓨터에서 여러 사람이 로그인해도 섞이지 않게).
 // 브라우저 저장은 '빠른 임시 보관'이고, 진짜 보관은 서버(auth.js의 saveIsland)예요.
 // 예전(로그인 없던 때) 저장은 LEGACY 칸에 그대로 있고, 처음 로그인한 계정으로 한 번만 옮겨 줘요.
-import { OUTER_NATURE, HOUSE_SPOT, DEFAULT_ROOM_ITEMS, fitHouse, clampToRoom, newId } from './world.js?v=0.50';
+import { OUTER_NATURE, HOUSE_SPOT, DEFAULT_ROOM_ITEMS, fitHouse, clampToRoom, newId } from './world.js?v=0.51';
 
 const LEGACY = 'cozy-space-demo:v1';
 const LEGACY_OWNER = 'cozy-space-demo:legacy-owner';
