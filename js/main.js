@@ -1,18 +1,18 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.49';
-import { Avatar } from './avatar.js?v=0.49';
-import { Environment } from './environment.js?v=0.49';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.49';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.49';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.49';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.49';
-import { Sound } from './sound.js?v=0.49';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.49';
-import { fmt } from './realtime.js?v=0.49';
-import { icon, fillIcons } from './icons.js?v=0.49';
-import { makeThumbnails } from './thumbs.js?v=0.49';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.49';
-import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.49';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.50';
+import { Avatar } from './avatar.js?v=0.50';
+import { Environment } from './environment.js?v=0.50';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.50';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.50';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.50';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.50';
+import { Sound } from './sound.js?v=0.50';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.50';
+import { fmt } from './realtime.js?v=0.50';
+import { icon, fillIcons } from './icons.js?v=0.50';
+import { makeThumbnails } from './thumbs.js?v=0.50';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.50';
+import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.50';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
