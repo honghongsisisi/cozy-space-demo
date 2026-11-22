@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.46';
-import { Avatar } from './avatar.js?v=0.46';
-import { Environment } from './environment.js?v=0.46';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.46';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.46';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.46';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.46';
-import { Sound } from './sound.js?v=0.46';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.46';
-import { fmt } from './realtime.js?v=0.46';
-import { icon, fillIcons } from './icons.js?v=0.46';
-import { makeThumbnails } from './thumbs.js?v=0.46';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.46';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.47';
+import { Avatar } from './avatar.js?v=0.47';
+import { Environment } from './environment.js?v=0.47';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.47';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.47';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.47';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.47';
+import { Sound } from './sound.js?v=0.47';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.47';
+import { fmt } from './realtime.js?v=0.47';
+import { icon, fillIcons } from './icons.js?v=0.47';
+import { makeThumbnails } from './thumbs.js?v=0.47';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.47';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -182,7 +182,9 @@ function showPlaza() {
   roomTitle = '광장';
   world.apply({ type: 'replaceAll', items: PLAZA_ITEMS }, { silent: true });
   env.restore({ time: 13, weather: 'clear', realTime: true, flowing: false }); // 광장은 한국 실제 시간, 맑음
-  avatar.restore({ x: (Math.random() - 0.5) * 2.4, z: 9.5 + Math.random() * 1.5, facing: Math.PI });
+  // 광장 입구 둘레 아무 데나 (여러 사람이 한 자리에 겹쳐 서지 않게 넓게 흩어 줌)
+  const a = (Math.random() - 0.5) * 0.7, r = 9.4 + Math.random() * 1.8;
+  avatar.restore({ x: Math.sin(a) * r, z: Math.cos(a) * r, facing: Math.PI });
 }
 showPlaza();
 cam.target.copy(avatar.position).add(new THREE.Vector3(0, 1.3, 0));
