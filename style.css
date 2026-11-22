@@ -482,3 +482,4 @@ body.ghost .account-only { display: none; }
 /* 방명록을 오른쪽 메뉴로 (v0.43) */
 body[data-space="plaza"] .rail-btn[data-cat="guestbook"] { display: none; }
 .pane[data-pane="guestbook"] .gb-list { max-height: none; }
+.gb-msg { color: var(--danger); }

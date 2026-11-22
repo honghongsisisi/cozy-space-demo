@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.44';
-import { Avatar } from './avatar.js?v=0.44';
-import { Environment } from './environment.js?v=0.44';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.44';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.44';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.44';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.44';
-import { Sound } from './sound.js?v=0.44';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.44';
-import { fmt } from './realtime.js?v=0.44';
-import { icon, fillIcons } from './icons.js?v=0.44';
-import { makeThumbnails } from './thumbs.js?v=0.44';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.44';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.46';
+import { Avatar } from './avatar.js?v=0.46';
+import { Environment } from './environment.js?v=0.46';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.46';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.46';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.46';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.46';
+import { Sound } from './sound.js?v=0.46';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.46';
+import { fmt } from './realtime.js?v=0.46';
+import { icon, fillIcons } from './icons.js?v=0.46';
+import { makeThumbnails } from './thumbs.js?v=0.46';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.46';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1264,7 +1264,8 @@ const gbInput = document.getElementById('gb-input');
 const gbSend = document.getElementById('gb-send');
 const gbRoom = () => (space === 'home' ? MY_ROOM : space === 'visit' ? visitId : '');
 const gbSeenKey = () => `cozy-space-demo:gbseen:${account ? account.id : ''}`;
-const gbDay = (iso) => new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' });
+// 방명록 글 시각: '11월 22일 오후 9:07' (한국 시간)
+const gbDay = (iso) => new Date(iso).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Seoul' });
 let gbShownFor = '';
 async function gbRefresh() {
   const room = gbRoom();
@@ -1278,7 +1279,7 @@ async function gbRefresh() {
   if (gbShownFor !== room) gbList.innerHTML = '<div class="gb-empty">불러오는 중…</div>';
   let rows;
   try { rows = await guestbookList(room); }
-  catch (e) { if (gbRoom() === room) gbList.innerHTML = `<div class="gb-empty">${e && e.missing ? '방명록은 곧 열려요' : '방명록을 불러오지 못했어요'}</div>`; return; }
+  catch (e) { if (gbRoom() === room) gbList.innerHTML = `<div class="gb-empty">${e && e.missing ? '방명록은 곧 열려요' : `방명록을 불러오지 못했어요 (${String((e && (e.code || e.message)) || '').slice(0, 30).replace(/[<>&]/g, '')})`}</div>`; return; }
   if (gbRoom() !== room) return;
   gbShownFor = room;
   gbList.innerHTML = '';
@@ -1314,6 +1315,8 @@ async function gbWrite() {
   gbBusy = true; gbSend.disabled = true;
   const r = await guestbookWrite(room, body, nameOr());
   gbBusy = false; gbSend.disabled = false;
+  const msgEl = document.getElementById('gb-msg');
+  msgEl.textContent = r.error || ''; msgEl.classList.toggle('hidden', !r.error); // 실패하면 글 아래에 남겨 둬요 (금방 사라지지 않게)
   if (r.error) { toast(r.error); return; }
   gbInput.value = ''; gbLeft();
   toast('방명록에 남겼어요');

@@ -3,7 +3,7 @@
 // 다음에 켤 때는 다시 로그인하지 않아도 돼요.
 // 섬은 서버의 islands 표에 한 사람당 한 줄로 저장돼요. 표의 규칙(RLS) 때문에 내 줄만 읽고 쓸 수 있어요.
 // 주소 끝에 ?localtest=1 을 붙이면 서버 없이 이 브라우저 안에서만 가짜 계정으로 시험해요 (개발용).
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.44';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.46';
 
 const LOCAL_TEST = new URLSearchParams(location.search).has('localtest');
 let client = null;
@@ -150,7 +150,9 @@ const gbErr = (e) => {
   if (m.includes('login_required')) return '가입한 사람만 방명록을 쓸 수 있어요';
   if (m.includes('no_island')) return '아직 저장된 적 없는 섬이라 방명록을 남길 수 없어요';
   if (m.includes('bad_length')) return '100자까지 적을 수 있어요';
-  return korean(e);
+  // 모르는 문제는 서버가 준 짧은 표시(코드)를 뒤에 붙여 둬요. 화면을 찍어 보내 주면 원인을 찾기 쉬워요
+  const code = e && (e.code || e.status) ? ` (${String(e.code || e.status).slice(0, 12)})` : '';
+  return korean(e) + code;
 };
 
 // 방명록 읽기 → [{ id, author_name, body, created_at, mine }]
