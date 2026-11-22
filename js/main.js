@@ -1,18 +1,18 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.48';
-import { Avatar } from './avatar.js?v=0.48';
-import { Environment } from './environment.js?v=0.48';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.48';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.48';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.48';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.48';
-import { Sound } from './sound.js?v=0.48';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.48';
-import { fmt } from './realtime.js?v=0.48';
-import { icon, fillIcons } from './icons.js?v=0.48';
-import { makeThumbnails } from './thumbs.js?v=0.48';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.48';
-import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.48';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.49';
+import { Avatar } from './avatar.js?v=0.49';
+import { Environment } from './environment.js?v=0.49';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.49';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.49';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.49';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.49';
+import { Sound } from './sound.js?v=0.49';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.49';
+import { fmt } from './realtime.js?v=0.49';
+import { icon, fillIcons } from './icons.js?v=0.49';
+import { makeThumbnails } from './thumbs.js?v=0.49';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.49';
+import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.49';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -216,14 +216,15 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey) return; // 다른 단축키(새로 고침 등)는 브라우저에 맡김
   keys.add(k);
-  if (k === ' ') { e.preventDefault(); if (fishing && fishing.active) fishing.tap(); else doJump(); } // 낚시 중엔 Space로 낚아채기
-  if (k === '1') doWave();
+  if (k === ' ') { e.preventDefault(); if (fishing && fishing.active) fishing.tap(); else if (avatar.pose) standUp(); else doJump(); } // 낚시 중엔 Space로 낚아채기, 앉아 있으면 일어나기
+  if (k === '1') { if (avatar.pose) standUp(); doWave(); }
   if (k === 'i') openPanel(panelOpen && currentPane === 'furniture' ? null : 'furniture');
   if (k === 'r') rotateCurrent(e.shiftKey ? 45 : 15);
   if (k === 'm' && selectedId) startMove(selectedId);
   if ((k === 'delete' || k === 'backspace') && selectedId) removeSelected();
   if (k === 'escape') {
     if (!help.classList.contains('hidden')) help.classList.add('hidden');
+    else if (useShown) hideUseCard();
     else if (placing) stopPlacing(true);
     else if (selectedId) select(null);
     else if (panelOpen) openPanel(null);
@@ -378,6 +379,12 @@ function handleClick(e) {
   if (party) { setNdc(e); const pp = party.pickPeer(raycaster); if (pp) { showPeerCard(pp); return; } }
   // 우체통을 누르면 방명록 (v0.43)
   if (space !== 'plaza' && clickedType(e) === 'mailbox') { openPanel('guestbook'); return; }
+  // 의자·침대·책장·창문을 누르면 '사용하기' 카드 (v0.49)
+  const u = pickUse(e);
+  if (u) { showUseCard(u); return; }
+  hideUseCard();
+  pendingUse = null;
+  if (avatar.pose) standUp();
   route.length = 0;
   // 집 안에서 마당을 누르면: 문까지 걸어가 밖으로 나간 뒤 그 자리까지 이어서 걸어가요 (따로 나가는 버튼 없이)
   if (inside) {
@@ -591,6 +598,7 @@ world.onChange(refreshStock);
 refreshStock();
 
 function setDecorating(on) {
+  if (on) { hideUseCard(); pendingUse = null; if (avatar.pose) standUp(); }
   decorating = on;
   refreshGridBtn();
   if (!on) { stopPlacing(true); select(null); setHover(null); }
@@ -822,7 +830,7 @@ setRole(role);
 // ---------- 기타 버튼 ----------
 // 점프·인사는 친구 화면에도 보이게
 function doJump() { if (avatar.y <= 0.001 && party) party.act('jump'); avatar.jump(); }
-function doWave() { avatar.wave(); if (party) party.act('wave'); }
+function doWave() { if (avatar.pose) standUp(); avatar.wave(); if (party) party.act('wave'); }
 document.getElementById('btn-respawn').addEventListener('click', () => { avatar.restore(inside ? { ...ROOM_SPAWN, facing: Math.PI } : { x: 0, z: 3, facing: 0 }); avatar.target = null; toast('처음 자리로 왔어요'); });
 document.getElementById('btn-full').addEventListener('click', () => {
   const app = document.getElementById('app');
@@ -1247,6 +1255,7 @@ function moveTo(dest, room) {
   if (dest === 'plaza' && !netConfigured()) { toast('광장은 서버 연결을 마친 뒤에 열려요'); return; }
   const go = () => {
     moving = true;
+    hideUseCard(); pendingUse = null;
     document.getElementById('fade-text').textContent = dest === 'plaza' ? '광장으로 가는 중…' : dest === 'visit' ? '친구 섬으로 가는 중…' : '우리 집으로 가는 중…';
     fadeEl.classList.add('on');
     setTimeout(() => {
@@ -1720,6 +1729,159 @@ function checkDoors() {
   return false;
 }
 
+// ---------- 가구 사용하기 (v0.49) ----------
+// 꾸미기 중이 아닐 때 가구를 한 번 누르면 작은 '사용하기' 카드가 떠요. 고르면 캐릭터가 걸어가서 그 동작을 해요.
+// 움직이거나(땅 누르기·방향키) 점프·인사를 하면 일어나요. 친구 화면에도 같은 자세로 보여요(party.js의 st 쪽지).
+// 가구마다 고를 건 1~2개만. 새 동작은 USES에 한 줄, 자리는 useSpot에서 정해요.
+const USES = {
+  chair: [{ kind: 'sit', name: '앉기' }, { kind: 'doze', name: '꾸벅꾸벅 졸기' }],
+  bench: [{ kind: 'sit', name: '앉기' }, { kind: 'doze', name: '꾸벅꾸벅 졸기' }],
+  bed: [{ kind: 'lie', name: '눕기' }, { kind: 'sleep', name: '이불 덮고 자기' }],
+  shelf: [{ kind: 'read', name: '책 읽기' }],
+};
+const WINDOW_USES = [{ kind: 'look', name: '창밖 보기' }];
+const USE_NAMES = { chair: '나무 의자', bench: '벤치', bed: '작은 침대', shelf: '책장', window: '창문' };
+const useCard = document.getElementById('use-card');
+let useShown = null;   // 카드에 띄운 가구 { id | win, x, z, type }
+let pendingUse = null; // 걸어가는 중인 사용하기 { kind, x, z, facing, h, exit, approach, id }
+const canUse = () => !ghost && !decorating && !placing && !avatar.swimming && !avatar.fishing;
+
+// 누른 자리의 쓸 수 있는 가구 (없으면 null)
+function pickUse(e) {
+  if (!canUse()) return null;
+  setNdc(e);
+  if (inside) {
+    const wins = world.walls.flatMap((w) => w.userData.windows).filter((g) => g.visible);
+    const hit = raycaster.intersectObjects(wins, true)[0];
+    const furn = raycaster.intersectObject(world.root, true)[0];
+    if (hit && (!furn || hit.distance <= furn.distance + 0.01)) {
+      let g = hit.object; while (g && !wins.includes(g)) g = g.parent;
+      const wall = g.parent.parent, n = wall.userData.normal; // 바깥 방향
+      const wp = g.getWorldPosition(new THREE.Vector3());
+      return { win: true, type: 'window', x: wp.x - n.x * 0.15, z: wp.z - n.z * 0.15, n };
+    }
+  }
+  let id = null;
+  for (const h of raycaster.intersectObject(world.root, true)) { id = world.findItemFromObject(h.object); if (id) break; }
+  const ok = (i) => i && world.items.get(i) && USES[world.items.get(i).data.type];
+  if (!ok(id)) {
+    id = null;
+    const p = groundPoint(e);
+    let best = 0.8;
+    if (p) world.items.forEach(({ data }) => { if (!USES[data.type]) return; const d = Math.hypot(data.x - p.x, data.z - p.z); if (d < best) { best = d; id = data.id; } });
+  }
+  if (!ok(id)) return null;
+  const d = world.items.get(id).data;
+  return { id, type: d.type, x: d.x, z: d.z };
+}
+
+// 가구 자리 계산: 가구 기준 자리(lx, lz)를 지금 화면 자리로
+function useSpot(u, kind) {
+  if (u.win) {
+    const f = Math.atan2(u.n.x, u.n.z); // 창밖을 바라봐요
+    const at = clampPos(u.x - u.n.x * 0.55, u.z - u.n.z * 0.55);
+    return { kind, x: at.x, z: at.z, facing: f, h: 0, exit: at, approach: at };
+  }
+  const it = world.items.get(u.id);
+  if (!it) return null;
+  const { x, z, rot } = it.data, a = rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const L = (lx, lz) => ({ x: x + lx * c + lz * s, z: z - lx * s + lz * c });
+  const me = avatar.position;
+  const myLx = (me.x - x) * c - (me.z - z) * s; // 내가 가구의 왼쪽/오른쪽 어디에 있는지
+  const base = { kind, facing: a, id: u.id, key: `${x},${z},${rot}` };
+  const fix = (o) => { o.exit = clampPos(o.exit.x, o.exit.z); o.approach = o.approach || o.exit; return o; };
+  if (u.type === 'chair') { const seat = L(0, 0.04); return fix({ ...base, ...seat, h: 0.54, exit: L(0, 0.8) }); }
+  if (u.type === 'bench') {
+    // 긴 벤치는 세 자리. 내 쪽에서 가까운 빈자리에 앉아요
+    const spots = [-0.42, 0, 0.42].sort((p, q) => Math.abs(p - myLx) - Math.abs(q - myLx));
+    const lx = spots.find((v) => !taken(L(v, 0.02))) ?? spots[0];
+    return fix({ ...base, ...L(lx, 0.02), h: 0.46, exit: L(lx, 0.85) });
+  }
+  if (u.type === 'bed') {
+    const side = myLx < 0 ? -1 : 1; // 내가 선 쪽으로 내려와요
+    return fix({ ...base, ...L(0, 0.85), h: 0.62, exit: L(side * 1.05, 0.3) });
+  }
+  if (u.type === 'shelf') { const at = L(0, 0.78); return fix({ ...base, ...at, h: 0, exit: at }); }
+  return null;
+}
+// 친구가 이미 그 자리를 쓰고 있는지
+function taken(pt) {
+  if (!party) return false;
+  return [...party.peers.values()].some((p) => p.av.pose && p.av.root.visible && Math.hypot(p.av.pose.x - pt.x, p.av.pose.z - pt.z) < 0.35);
+}
+
+function showUseCard(u) {
+  useShown = u;
+  document.getElementById('use-name').textContent = USE_NAMES[u.type] || '';
+  const list = document.getElementById('use-actions');
+  list.innerHTML = '';
+  (u.win ? WINDOW_USES : USES[u.type]).forEach((m) => {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = m.name;
+    b.addEventListener('click', () => startUse(u, m.kind));
+    list.appendChild(b);
+  });
+  useCard.classList.remove('hidden');
+  placeUseCard();
+}
+function hideUseCard() { useShown = null; useCard.classList.add('hidden'); }
+document.getElementById('use-close').addEventListener('click', hideUseCard);
+// 카드는 가구 바로 위에 떠 있어요 (화면을 돌려도 따라가요)
+function placeUseCard() {
+  if (!useShown) return;
+  const v = new THREE.Vector3(useShown.x, useShown.win ? 2.7 : 1.7, useShown.z).project(camera);
+  if (v.z > 1) { useCard.style.visibility = 'hidden'; return; }
+  useCard.style.visibility = '';
+  const W = viewport.clientWidth, H = viewport.clientHeight;
+  const cw = useCard.offsetWidth, ch = useCard.offsetHeight;
+  const px = Math.max(cw / 2 + 8, Math.min(W - cw / 2 - 8, ((v.x + 1) / 2) * W));
+  const py = Math.max(ch + 8, Math.min(H - 8, ((1 - v.y) / 2) * H));
+  // 1픽셀보다 작게 흔들리면 그대로 둬요 (카드가 떨리지 않게)
+  const lx = parseFloat(useCard.style.left) || -99, ly = parseFloat(useCard.style.top) || -99;
+  if (Math.abs(px - lx) > 1.5 || Math.abs(py - ly) > 1.5) { useCard.style.left = `${Math.round(px)}px`; useCard.style.top = `${Math.round(py)}px`; }
+}
+
+function startUse(u, kind) {
+  hideUseCard();
+  const sp = useSpot(u, kind);
+  if (!sp) return;
+  if (taken(sp)) { toast('친구가 쓰고 있어요'); return; }
+  if (avatar.pose) avatar.clearPose(true);
+  route.length = 0;
+  pendingUse = { ...sp, where: `${space}:${inside}`, t0: performance.now() };
+  avatar.running = false;
+  avatar.moveTo(sp.approach.x, sp.approach.z);
+  marker.visible = false;
+}
+function standUp() {
+  if (!avatar.pose) return;
+  avatar.clearPose(false);
+  if (party) party.sendState(true);
+}
+// 매 프레임: 가구 앞에 닿으면 자세 잡기, 가구가 옮겨지거나 치워지면 일어나기
+function updateUse() {
+  placeUseCard();
+  if (pendingUse) {
+    const pu = pendingUse;
+    if (pu.where !== `${space}:${inside}` || (pu.id && !world.items.get(pu.id)) || performance.now() - pu.t0 > 12000) { pendingUse = null; return; }
+    const d = Math.hypot(avatar.position.x - pu.approach.x, avatar.position.z - pu.approach.z);
+    // 가구에 몸이 닿았으면(뒤나 옆에서 왔어도) 바로 앉아요. 둥근 부딪힘에 걸려 빙빙 돌지 않게
+    const it = pu.id && world.items.get(pu.id);
+    const touch = it && Math.hypot(avatar.position.x - it.data.x, avatar.position.z - it.data.z) < (ITEM_BY_TYPE[it.data.type].radius || 0) + 0.5;
+    if (d < 0.3 || touch || (!avatar.target && d < 1.3)) {
+      pendingUse = null;
+      avatar.setPose(pu);
+      if (party) party.sendState(true);
+    } else if (!avatar.target) { pendingUse = null; toast('가까이 갈 수 없어요. 둘레 물건을 조금 옮겨 보세요'); } // 길이 막혀 못 갔어요
+  }
+  const ap = avatar.pose;
+  if (ap && ap.id) {
+    const it = world.items.get(ap.id);
+    if (!it || `${it.data.x},${it.data.z},${it.data.rot}` !== ap.key) standUp();
+  }
+}
+
 // ---------- 모션 ----------
 // 새 모션은 이 목록에 한 줄 더하면 버튼이 생겨요 (목록은 짧게 유지)
 const MOTIONS = [
@@ -1894,7 +2056,10 @@ function frame() {
   if (keys.has('q')) cam.yaw += dt * 1.8;
   if (keys.has('e')) cam.yaw -= dt * 1.8;
   const typing = !help.classList.contains('hidden') || !joinEl.classList.contains('hidden') || !authEl.classList.contains('hidden');
-  avatar.update(dt, typing ? { x: 0, y: 0 } : moveInput(), cam.yaw, world.colliders());
+  const mvIn = typing ? { x: 0, y: 0 } : moveInput();
+  if (mvIn.x || mvIn.y) { if (avatar.pose) standUp(); pendingUse = null; } // 움직이면 일어나요
+  updateUse();
+  avatar.update(dt, mvIn, cam.yaw, world.colliders());
   world.update(dt);
   updateCamera(dt);
   world.updateWalls(dt, camera.position);
@@ -1953,7 +2118,7 @@ setTimeout(checkNewVersion, 1500);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkNewVersion(); });
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
-window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; }, get inside() { return inside; }, goThroughDoor };
+window.cozy = { world, avatar, startUse, pickUse, useSpot, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; }, get inside() { return inside; }, goThroughDoor };
 
 // 시험용(?localtest=1 일 때만): 화면 확인 도구가 캐릭터·낚시 상태를 볼 수 있게
 if (new URLSearchParams(location.search).has('localtest')) window.__test = { avatar, fishing, env, cam, world, get space() { return space; } };

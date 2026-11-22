@@ -3,7 +3,7 @@
 // 다음에 켤 때는 다시 로그인하지 않아도 돼요.
 // 섬은 서버의 islands 표에 한 사람당 한 줄로 저장돼요. 표의 규칙(RLS) 때문에 내 줄만 읽고 쓸 수 있어요.
 // 주소 끝에 ?localtest=1 을 붙이면 서버 없이 이 브라우저 안에서만 가짜 계정으로 시험해요 (개발용).
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.48';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.49';
 
 const LOCAL_TEST = new URLSearchParams(location.search).has('localtest');
 let client = null;
