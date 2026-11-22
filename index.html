@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.50">
+  <link rel="stylesheet" href="style.css?v=0.51">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -114,12 +114,14 @@
           <button id="peer-visit" class="btn"><i data-icon="home"></i>섬 구경 가기</button>
         </div>
       </div>
-      <!-- 가구를 한 번 누르면 뜨는 '사용하기' 카드 (v0.49) -->
+      <!-- 길게 누르는 동안 손가락 자리에 차오르는 동그라미 (v0.51) -->
+      <svg id="press-ring" class="press-ring hidden" viewBox="0 0 44 44"><circle class="pr-bg" cx="22" cy="22" r="17"/><circle class="pr-fill" cx="22" cy="22" r="17"/></svg>
+      <!-- 가구를 길게 누르면(PC는 오른쪽 클릭) 뜨는 '사용하기' 카드 (v0.49, v0.51부터 길게 누르기) -->
       <div id="use-card" class="use-card hidden">
         <div class="use-head"><b id="use-name"></b><button id="use-close" class="icon-btn" title="닫기"><i data-icon="close"></i></button></div>
         <div id="use-actions" class="use-actions"></div>
       </div>
-      <!-- 땅에 서서 바다를 누르면: 낚시하기 / 헤엄쳐 가기 (v0.49) -->
+      <!-- 바다를 길게 누르면(PC는 오른쪽 클릭): 낚시하기 / 헤엄쳐 가기 (v0.51부터 길게 누르기) -->
       <div id="sea-menu" class="sea-menu hidden">
         <button id="sea-fish" class="btn btn-accent"><i data-icon="fish"></i>낚시하기</button>
         <button id="sea-swim" class="btn"><i data-icon="wave"></i>헤엄쳐 가기</button>
@@ -192,7 +194,7 @@
             <div id="fish-dex" class="dex-grid"></div>
           </div>
           <ul class="pane-tip">
-            <li>섬 가장자리 모래밭에서 바다를 누르면 낚시할 수 있어요</li>
+            <li>내 섬에서 바다를 꾹 누르면(PC는 오른쪽 클릭) 낚시할 수 있어요</li>
             <li>찌가 쑥 들어가면 화면을 누르거나 <kbd>Space</kbd></li>
             <li>시간과 날씨에 따라 나오는 물고기가 조금씩 달라요</li>
             <li>모은 조개로 살 수 있는 가구 상점은 곧 열려요</li>
@@ -319,7 +321,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.50</span>
+      <span class="version" title="지금 보고 있는 버전">v0.51</span>
     </nav>
   </div>
 
@@ -365,8 +367,9 @@
       <li><b>되돌리기</b> <kbd>Ctrl</kbd>+<kbd>Z</kbd> · 다시 하기 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></li>
       <li><b>분위기</b> 위쪽에서 시간과 날씨를 바꿔요. 현재 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
       <li><b>채팅</b> <kbd>Enter</kbd>로 입력줄을 열고 말을 쓰면 머리 위에 말풍선이 떠요</li>
-      <li><b>헤엄치기</b> 섬 밖 바다로 걸어 나가거나 바다를 누르면 첨벙 뛰어들어 헤엄쳐요</li>
-      <li><b>낚시</b> 섬 가장자리 모래밭에서 바다를 누르고 '낚시하기'. 찌가 쑥 들어가면 화면을 눌러요</li>
+      <li><b>헤엄치기</b> 섬 밖 바다로 걸어 나가거나 바다를 한 번 누르면 첨벙 뛰어들어 헤엄쳐요</li>
+      <li><b>낚시</b> 바다를 꾹 누르고(PC는 오른쪽 클릭) '낚시하기'. 찌가 쑥 들어가면 화면을 눌러요</li>
+      <li><b>가구 쓰기</b> 의자·침대·책장·창문을 꾹 누르면(PC는 오른쪽 클릭) 앉기·눕기 같은 동작을 고를 수 있어요</li>
       <li><b>사진</b> 위쪽 사진 버튼</li>
     </ul>
     <p class="muted">꾸민 섬은 내 계정에 자동으로 저장돼요. 다른 컴퓨터나 휴대폰에서도 같은 이메일로 로그인하면 그대로 나와요.</p>
@@ -401,6 +404,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.50"></script>
+<script type="module" src="js/main.js?v=0.51"></script>
 </body>
 </html>
