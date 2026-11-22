@@ -2,10 +2,13 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.47';
-import { PALETTE as P } from './palette.js?v=0.47';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.48';
+import { PALETTE as P } from './palette.js?v=0.48';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
+export const SEA_RADIUS = PLOT_RADIUS + 9; // 헤엄쳐 갈 수 있는 바다의 끝 (섬 테두리에서 9칸, v0.48)
+export const WATER_Y = -0.9; // 바다 물 높이
+export const BEACH_W = 1.6; // 섬 가장자리 모래밭 너비
 
 // 우리 집 자리: 섬 뒤쪽 오른편. 문은 처음 서 있는 쪽을 비스듬히 바라봄 (벤치에 길이 막히지 않게)
 export const HOUSE_SPOT = { type: 'cottage', x: 5.5, z: -10.2, rot: -20 };
@@ -157,7 +160,7 @@ export class World {
       new THREE.MeshPhongMaterial({ color: 0x8ec5f0, shininess: 25, specular: 0x1e1e1e })
     );
     this.water.rotation.x = -Math.PI / 2;
-    this.water.position.y = -0.9;
+    this.water.position.y = WATER_Y;
     this.water.receiveShadow = true;
     this.outdoor.add(this.water);
 
@@ -209,6 +212,28 @@ export class World {
     this.outdoor.add(top);
     this.groundPick = top;
     this.islandTop = top;
+    // 가장자리 모래밭 (v0.48): 잔디 위에 얇은 고리. 안쪽 경계를 조금씩 들쭉날쭉하게 해서 자연스럽게
+    {
+      const seg = 160, inner = R - BEACH_W, pos = [], idx = [];
+      let sv2 = 7; const rr = () => ((sv2 = (sv2 * 9301 + 49297) % 233280) / 233280);
+      const wob = Array.from({ length: seg }, () => rr());
+      for (let i = 0; i < seg; i++) {
+        const a = (i / seg) * Math.PI * 2;
+        const w = (wob[i] + wob[(i + 1) % seg] + wob[(i + seg - 1) % seg]) / 3; // 이웃과 섞어서 완만하게
+        const ri = inner + (w - 0.5) * 0.9;
+        pos.push(Math.cos(a) * ri, 0, Math.sin(a) * ri, Math.cos(a) * (R + 0.02), 0, Math.sin(a) * (R + 0.02));
+        const j = (i + 1) % seg;
+        idx.push(i * 2, j * 2, i * 2 + 1, i * 2 + 1, j * 2, j * 2 + 1);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx); g.computeVertexNormals();
+      const sand = new THREE.Mesh(g, mat(P.sand, { flatShading: false, side: THREE.DoubleSide }));
+      sand.position.y = 0.006;
+      sand.receiveShadow = true;
+      this.outdoor.add(sand);
+      this.sand = sand;
+    }
     // 나무 말뚝 테두리: 손으로 박은 것처럼 간격·굵기·높이·기울기를 조금씩 다르게
     let sv = 11; const rnd = () => ((sv = (sv * 9301 + 49297) % 233280) / 233280); // 늘 같은 모양이 나오는 난수
     const post = new THREE.CylinderGeometry(0.16, 0.18, 0.5, 6);
@@ -592,6 +617,12 @@ export function clampToRoom(x, z, pad = 0.45, door = false) {
   // 걷는 사람은 문 자리(앞쪽 가운데)로만 벽 밖으로 지나갈 수 있음
   if (door && z > ROOM_D / 2 - pad && Math.abs(x) < 0.9) return { x: Math.max(-0.5, Math.min(0.5, x)), z: Math.min(ROOM_D / 2 + 1.6, z) };
   return { x: Math.max(-ROOM_W / 2 + pad, Math.min(ROOM_W / 2 - pad, x)), z: Math.max(-ROOM_D / 2 + pad, Math.min(ROOM_D / 2 - pad, z)) };
+}
+// 바다 끝 너머로 가지 않게 (걷기·헤엄 목표 자리)
+export function clampToSea(x, z) {
+  const lim = SEA_RADIUS - 0.2, d = Math.hypot(x, z);
+  if (d <= lim) return { x, z };
+  return { x: (x / d) * lim, z: (z / d) * lim };
 }
 // 섬 밖으로 나가지 않게 안쪽으로 당기기
 export function clampToPlot(x, z) {

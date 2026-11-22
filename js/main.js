@@ -1,17 +1,18 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.47';
-import { Avatar } from './avatar.js?v=0.47';
-import { Environment } from './environment.js?v=0.47';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.47';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.47';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.47';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.47';
-import { Sound } from './sound.js?v=0.47';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.47';
-import { fmt } from './realtime.js?v=0.47';
-import { icon, fillIcons } from './icons.js?v=0.47';
-import { makeThumbnails } from './thumbs.js?v=0.47';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.47';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, clampToSea, newId, PLOT_RADIUS, BEACH_W, WATER_Y } from './world.js?v=0.48';
+import { Avatar } from './avatar.js?v=0.48';
+import { Environment } from './environment.js?v=0.48';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.48';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.48';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.48';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.48';
+import { Sound } from './sound.js?v=0.48';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.48';
+import { fmt } from './realtime.js?v=0.48';
+import { icon, fillIcons } from './icons.js?v=0.48';
+import { makeThumbnails } from './thumbs.js?v=0.48';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.48';
+import { Fishing, FISH, fishIcon, fishValue, WHEN_TEXT, MONEY } from './fishing.js?v=0.48';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -81,6 +82,7 @@ let ghostsOk = true; // 내 섬 설정: 유령 손님 받기 (v0.42)
 let space = 'plaza'; // 지금 있는 곳: home(내 섬) / visit(친구 섬) / plaza(광장)
 let account = null;  // 로그인한 사람 { id, email, nickname }
 let ghost = false;   // 가입하지 않은 손님(유령)
+let fishing = null;  // 바닷가 낚시 (v0.48, 아래 '낚시' 부분)
 // 집 안에 있는지 (내 섬·친구 섬 모두)
 let inside = false;
 let houseItems = DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() })); // 마당에 있는 동안 집 안 물건
@@ -98,6 +100,7 @@ function currentState() {
     items: yardList(),
     house: { items: houseList() },
     inventory: { owned: serializeOwned() }, // 가진 물건 개수 (나중에 상점에서 늘어남)
+    fishing: fishing ? fishing.serialize() : undefined, // 조개(게임 돈)·물고기 바구니·도감 (v0.48)
     settings: { ghosts: ghostsOk }, // 섬 주인 설정 (v0.42): 유령 손님 받기
     env: env.serialize(),
     avatar: inside && yardBack ? yardBack.avatar : avatar.serialize(),
@@ -164,6 +167,7 @@ function loadHome() {
   ghostsOk = !(saved && saved.settings && saved.settings.ghosts === false);
   document.getElementById('ghost-toggle').checked = ghostsOk;
   restoreOwned(saved && saved.inventory && saved.inventory.owned);
+  if (fishing) { fishing.restore(saved && saved.fishing); if (currentPane === 'fish') refreshFish(); }
   houseItems = saved && saved.house ? saved.house.items.map((i) => ({ ...i, ...clampToRoom(i.x, i.z, 0.3) })) : DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
   if (saved) {
     if (saved.title) roomTitle = saved.title;
@@ -212,7 +216,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.ctrlKey || e.metaKey) return; // 다른 단축키(새로 고침 등)는 브라우저에 맡김
   keys.add(k);
-  if (k === ' ') { e.preventDefault(); doJump(); }
+  if (k === ' ') { e.preventDefault(); if (fishing && fishing.active) fishing.tap(); else doJump(); } // 낚시 중엔 Space로 낚아채기
   if (k === '1') doWave();
   if (k === 'i') openPanel(panelOpen && currentPane === 'furniture' ? null : 'furniture');
   if (k === 'r') rotateCurrent(e.shiftKey ? 45 : 15);
@@ -354,6 +358,13 @@ function clickedDoor(e) {
 }
 
 function handleClick(e) {
+  hideSeaMenu();
+  fishGoal = null;
+  // 낚시 중: 찌가 들어갔을 때 누르면 낚아채기. 바다를 누르면 안내만. 땅을 누르면 낚시를 그만두고 걸어가요
+  if (fishing && fishing.active && !placing && !decorating) {
+    if (fishing.state === 'bite' || !groundPoint(e)) { fishing.tap(); return; }
+    fishing.stop();
+  }
   if (placing) {
     updateGhost(e);
     placeGhost();
@@ -389,17 +400,86 @@ function handleClick(e) {
     return;
   }
   const p = groundPoint(e);
-  if (p) {
-    const c = clampPos(p.x, p.z);
-    // 땅을 빠르게 두 번 클릭하면 달려감
-    const now = performance.now();
-    avatar.running = now - lastClick.t < 350 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 40;
-    lastClick = { x: e.clientX, y: e.clientY, t: now };
-    avatar.moveTo(c.x, c.z);
-    marker.position.set(avatar.target.x, 0.03, avatar.target.y);
-    marker.visible = true;
-    markerT = 1;
+  if (p) goTo(clampPos(p.x, p.z), e, 0.03);
+  else if (!inside) { const sp = seaPoint(e); if (sp) clickSea(e, sp); } // 섬 밖 바다를 누름 (v0.48)
+}
+// 누른 자리로 걸어가기 (빠르게 두 번 누르면 달려감)
+function goTo(c, e, y) {
+  const now = performance.now();
+  avatar.running = now - lastClick.t < 350 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 40;
+  lastClick = { x: e.clientX, y: e.clientY, t: now };
+  avatar.moveTo(c.x, c.z);
+  marker.position.set(avatar.target.x, y, avatar.target.y);
+  marker.visible = true;
+  markerT = 1;
+}
+
+// ---------- 바다: 헤엄치기 · 낚시 (v0.48) ----------
+// 바다를 누른 자리 (물 높이의 평평한 판과 만나는 곳). 섬 위면 null
+const seaPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y);
+function seaPoint(e) {
+  setNdc(e);
+  const v = raycaster.ray.intersectPlane(seaPlane, new THREE.Vector3());
+  return v && Math.hypot(v.x, v.z) > PLOT_RADIUS ? v : null;
+}
+// 땅에 서서 바다를 누르면 작은 고르기 창: 낚시하기 / 헤엄쳐 가기 (내 섬에서만 낚시. 헤엄은 어디서나)
+const seaMenu = document.getElementById('sea-menu');
+let seaSpot = null, seaEvt = null, fishGoal = null;
+function clickSea(e, sp) {
+  const c = clampToSea(sp.x, sp.z);
+  const canFish = space === 'home' && !ghost && !avatar.swimming && !avatar.hop;
+  if (!canFish) { goTo(c, e, WATER_Y + 0.05); return; }
+  seaSpot = { x: sp.x, z: sp.z }; seaEvt = { clientX: e.clientX, clientY: e.clientY };
+  const r = viewport.getBoundingClientRect();
+  seaMenu.style.left = `${Math.min(r.width - 90, Math.max(90, e.clientX - r.left))}px`;
+  seaMenu.style.top = `${Math.min(r.height - 60, Math.max(10, e.clientY - r.top - 70))}px`;
+  seaMenu.classList.remove('hidden');
+}
+function hideSeaMenu() { seaMenu.classList.add('hidden'); }
+document.getElementById('sea-swim').addEventListener('click', () => {
+  hideSeaMenu();
+  if (seaSpot) goTo(clampToSea(seaSpot.x, seaSpot.z), { clientX: -999, clientY: -999 }, WATER_Y + 0.05);
+});
+document.getElementById('sea-fish').addEventListener('click', () => {
+  hideSeaMenu();
+  if (!seaSpot) return;
+  // 누른 바다 쪽 모래밭 자리. 이미 그 근처 모래밭에 서 있으면 그 자리에서 바로 던져요
+  const p = avatar.position, a = Math.atan2(seaSpot.x, seaSpot.z);
+  const shore = { x: Math.sin(a) * (PLOT_RADIUS - 0.8), z: Math.cos(a) * (PLOT_RADIUS - 0.8) };
+  const onSand = Math.hypot(p.x, p.z) > PLOT_RADIUS - BEACH_W - 0.6;
+  const here = onSand && Math.hypot(p.x - shore.x, p.z - shore.z) < 3;
+  const from = here ? { x: p.x, z: p.z } : shore;
+  fishGoal = { ...from, ang: castAngle(from, seaSpot) };
+  if (here) { startFishing(); return; }
+  avatar.running = false;
+  avatar.moveTo(shore.x, shore.z);
+  markAt(seaSpot.x, seaSpot.z); marker.position.y = WATER_Y + 0.05;
+});
+// 던질 방향: 누른 바다 쪽. 단, 찌가 섬 위에 떨어지지 않게 너무 옆으로 비스듬하면 바다 쪽(바깥)으로
+function castAngle(from, to) {
+  let ang = Math.atan2(to.x - from.x, to.z - from.z);
+  const land = (q) => Math.hypot(from.x + Math.sin(q) * 4.2, from.z + Math.cos(q) * 4.2);
+  if (land(ang) < PLOT_RADIUS + 1.2) ang = Math.atan2(from.x, from.z);
+  return ang;
+}
+function startFishing() {
+  const g = fishGoal; fishGoal = null;
+  if (!g || !fishing) return;
+  marker.visible = false;
+  fishing.begin(g.ang);
+}
+// 매 프레임: 바닷가에 도착하면 낚시 시작. 다른 곳(집 안·광장·친구 섬)으로 가면 낚시는 그만
+function updateFishing(dt) {
+  if (!fishing) return;
+  const mi = moveInput();
+  if (mi.x || mi.y) { fishGoal = null; if (fishing.active) fishing.stop(); }
+  if (fishGoal && !avatar.target) {
+    const p = avatar.position;
+    if (Math.hypot(p.x, p.z) > PLOT_RADIUS - BEACH_W - 1.2 && !avatar.swimming) { fishGoal.x = p.x; fishGoal.z = p.z; startFishing(); }
+    else { fishGoal = null; toast('바닷가까지 가지 못했어요. 모래밭 가까이에서 다시 해 봐요'); }
   }
+  if (fishing.active && (inside || space !== 'home' || ghost)) fishing.stop();
+  fishing.update(dt);
 }
 
 // ---------- 되돌리기 / 다시 하기 ----------
@@ -523,7 +603,7 @@ const rail = document.getElementById('rail');
 const railSub = document.getElementById('rail-sub');
 const PANES = {
   space: '내 공간', friends: '친구', guestbook: '방명록', manage: '관리',
-  furniture: '아이템 · 가구', closet: '아이템 · 옷장', shop: '아이템 · 상점',
+  furniture: '아이템 · 가구', closet: '아이템 · 옷장', shop: '아이템 · 상점', fish: '아이템 · 물고기',
 };
 let panelOpen = false, currentPane = null;
 function openPanel(pane) {
@@ -536,8 +616,9 @@ function openPanel(pane) {
     if (pane === 'space') refreshSpaceInfo();
     if (pane === 'friends') { refreshRecent(); friendsRefresh(); }
     if (pane === 'guestbook') gbRefresh();
+    if (pane === 'fish') refreshFish();
   }
-  const isItem = ['furniture', 'closet', 'shop'].includes(pane);
+  const isItem = ['furniture', 'closet', 'shop', 'fish'].includes(pane);
   rail.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('on', b.dataset.cat === pane || (b.dataset.cat === 'items' && isItem)));
   rail.querySelector('.rail-group').classList.toggle('open', isItem);
   railSub.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.sub === pane));
@@ -549,7 +630,7 @@ rail.addEventListener('click', (e) => {
   let pane = b.dataset.sub || b.dataset.cat;
   if (pane === 'items') pane = 'furniture';
   // 같은 메뉴를 다시 누르면 접힘
-  if (panelOpen && (pane === currentPane || (b.dataset.cat === 'items' && ['furniture', 'closet', 'shop'].includes(currentPane)))) openPanel(null);
+  if (panelOpen && (pane === currentPane || (b.dataset.cat === 'items' && ['furniture', 'closet', 'shop', 'fish'].includes(currentPane)))) openPanel(null);
   else openPanel(pane);
 });
 document.getElementById('panel-close').addEventListener('click', () => openPanel(null));
@@ -791,6 +872,53 @@ document.getElementById('btn-save').addEventListener('click', () => saveNow(true
 // 소리
 const sound = new Sound();
 avatar.onStep = () => { if (!avatar.isGhost) sound.footstep(); }; // 유령은 발소리가 없어요
+avatar.onSplash = (big) => sound.splash(big);   // 바다에 첨벙 (v0.48)
+avatar.onStroke = () => sound.swimStroke();     // 헤엄칠 때 작은 물소리
+let seaEdgeT = 0;
+avatar.onSeaEdge = () => { const now = performance.now(); if (now - seaEdgeT > 8000) { seaEdgeT = now; toast('바다는 여기까지예요. 섬으로 돌아가요'); } };
+
+// ---------- 낚시 (v0.48) ----------
+fishing = new Fishing({ scene, avatar, env, sound, toast, onChange: () => { if (currentPane === 'fish') refreshFish(); if (space === 'home') scheduleSave(); } });
+function refreshFish() {
+  const d = fishing.data, home = space === 'home';
+  document.getElementById('fish-coins').textContent = d.coins.toLocaleString();
+  // 바구니: 종류별로 묶어서
+  const groups = new Map();
+  d.basket.forEach((b) => { const g = groups.get(b.f) || { n: 0, sum: 0, best: 0 }; g.n++; g.sum += fishValue(b.f, b.cm); g.best = Math.max(g.best, b.cm); groups.set(b.f, g); });
+  const list = document.getElementById('fish-basket');
+  document.getElementById('fish-basket-count').textContent = d.basket.length ? `${d.basket.length}마리` : '';
+  list.innerHTML = '';
+  if (!d.basket.length) list.innerHTML = '<p class="pane-note">아직 바구니가 비었어요. 섬 가장자리 모래밭에서 바다를 눌러 낚시해 보세요.</p>';
+  FISH.forEach((f) => {
+    const g = groups.get(f.id); if (!g) return;
+    const row = document.createElement('div'); row.className = 'fish-row';
+    row.innerHTML = `<img src="${fishIcon(f.id)}" alt=""><span class="fr-name"><span><b>${f.name}</b> ×${g.n}</span><small>가장 큰 것 ${g.best}cm</small></span><button class="btn" ${home ? '' : 'disabled'}>팔기 +${g.sum}</button>`;
+    row.querySelector('button').addEventListener('click', () => { const r = fishing.sellKind(f.id); toast(`${f.name} ${r.n}마리를 팔아 ${MONEY} ${r.sum}개를 받았어요`); });
+    list.appendChild(row);
+  });
+  const total = d.basket.reduce((s, b) => s + fishValue(b.f, b.cm), 0);
+  const all = document.getElementById('fish-sell-all');
+  all.classList.toggle('hidden', !d.basket.length);
+  all.disabled = !home;
+  all.innerHTML = `${icon('shell')}모두 팔기 · ${MONEY} +${total}`;
+  document.getElementById('fish-away').classList.toggle('hidden', home);
+  // 도감
+  const dex = document.getElementById('fish-dex');
+  const got = FISH.filter((f) => d.dex[f.id]).length;
+  document.getElementById('fish-dex-count').textContent = `${got}/${FISH.length}`;
+  dex.innerHTML = '';
+  FISH.forEach((f) => {
+    const r = d.dex[f.id];
+    const cell = document.createElement('div'); cell.className = 'dex-cell' + (r ? '' : ' unknown');
+    cell.innerHTML = r ? `<img src="${fishIcon(f.id)}" alt=""><b>${f.name}</b><small>${r.best}cm · ${r.n}마리</small>`
+      : `<img src="${fishIcon(f.id, true)}" alt=""><b>???</b><small>${WHEN_TEXT[f.when]}</small>`;
+    dex.appendChild(cell);
+  });
+}
+document.getElementById('fish-sell-all').addEventListener('click', () => {
+  const r = fishing.sellAll();
+  if (r.n) toast(`물고기 ${r.n}마리를 팔아 ${MONEY} ${r.sum}개를 받았어요`);
+});
 const btnSound = document.getElementById('btn-sound');
 const btnSound2 = document.getElementById('btn-sound2');
 function refreshSoundBtn() {
@@ -1032,6 +1160,7 @@ function startParty() {
     getRoom: () => (account ? MY_ROOM : ''),
     getWorld: () => ({ title: roomTitle, items: yardList(), house: houseList(), env: env.serialize(), ghosts: ghostsOk }),
     getInside: () => inside,
+    islandCenter: () => (inside && world.houseT ? world.toLocal(0, 0) : { x: 0, z: 0 }),
     // 친구 자리를 내 화면 자리로: 친구가 마당·나는 집 안이면 집 기준 자리로 바꿔서 보여 줌, 친구가 집 안·나는 마당이면 지붕에 가려 안 보임
     view: (x, z, f, peerInside) => {
       if (peerInside === inside) return { x, z, f };
@@ -1793,6 +1922,7 @@ function frame() {
     }
   }
   updateTools();
+  updateFishing(dt);
   if (party) party.update(dt);
   chat.update();
   sound.setRain(env.weather === 'rain', inside); // 비가 오면 빗소리 (집 안에서는 작게)
@@ -1824,3 +1954,6 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // 디버그·테스트용 (나중에 멀티 기능을 붙일 때도 이 통로를 씁니다)
 window.cozy = { world, avatar, env, cam, camera, saveNow, sound, setRole, chat, undo, redo, get party() { return party; }, moveTo, get space() { return space; }, get inside() { return inside; }, goThroughDoor };
+
+// 시험용(?localtest=1 일 때만): 화면 확인 도구가 캐릭터·낚시 상태를 볼 수 있게
+if (new URLSearchParams(location.search).has('localtest')) window.__test = { avatar, fishing, env, cam, world, get space() { return space; } };
