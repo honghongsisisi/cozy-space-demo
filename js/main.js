@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.41';
-import { Avatar } from './avatar.js?v=0.41';
-import { Environment } from './environment.js?v=0.41';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.41';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.41';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.41';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland } from './auth.js?v=0.41';
-import { Sound } from './sound.js?v=0.41';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.41';
-import { fmt } from './realtime.js?v=0.41';
-import { icon, fillIcons } from './icons.js?v=0.41';
-import { makeThumbnails } from './thumbs.js?v=0.41';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.41';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.42';
+import { Avatar } from './avatar.js?v=0.42';
+import { Environment } from './environment.js?v=0.42';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.42';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.42';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.42';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.42';
+import { Sound } from './sound.js?v=0.42';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.42';
+import { fmt } from './realtime.js?v=0.42';
+import { icon, fillIcons } from './icons.js?v=0.42';
+import { makeThumbnails } from './thumbs.js?v=0.42';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.42';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -75,7 +75,8 @@ let viewShift = 0, viewShiftY = 0;
 // 초대 링크는 주소 끝에 ?visit=섬번호 가 붙어 있어요. 내 섬 번호가 아니면 '손님'으로 들어가요.
 // v0.41: 섬 번호는 내 계정에서 만들어져서, 어느 컴퓨터·휴대폰에서 로그인해도 같아요.
 let MY_ROOM = '';
-const visitId = (new URLSearchParams(location.search).get('visit') || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
+let visitId = (new URLSearchParams(location.search).get('visit') || '').replace(/[^a-z0-9]/gi, '').slice(0, 16).toLowerCase(); // 지금 구경 중인 친구 섬 번호
+let ghostsOk = true; // 내 섬 설정: 유령 손님 받기 (v0.42)
 // 로그인 창이 떠 있는 동안에는 광장을 뒤에 배경으로 보여 줘요 (아직 아무것도 저장하지 않음)
 let space = 'plaza'; // 지금 있는 곳: home(내 섬) / visit(친구 섬) / plaza(광장)
 let account = null;  // 로그인한 사람 { id, email, nickname }
@@ -97,6 +98,7 @@ function currentState() {
     items: yardList(),
     house: { items: houseList() },
     inventory: { owned: serializeOwned() }, // 가진 물건 개수 (나중에 상점에서 늘어남)
+    settings: { ghosts: ghostsOk }, // 섬 주인 설정 (v0.42): 유령 손님 받기
     env: env.serialize(),
     avatar: inside && yardBack ? yardBack.avatar : avatar.serialize(),
     cam: { yaw: inside && world.houseT ? cam.yaw + world.houseT.a : cam.yaw, pitch: cam.pitch, dist: cam.dist },
@@ -159,6 +161,8 @@ let roomTitle = '나의 작은 섬';
 function loadHome() {
   const saved = account ? loadState(userKey(account.id)) : null; // 로그인할 때 서버와 맞춰 둔 내 섬
   roomTitle = '나의 작은 섬';
+  ghostsOk = !(saved && saved.settings && saved.settings.ghosts === false);
+  document.getElementById('ghost-toggle').checked = ghostsOk;
   restoreOwned(saved && saved.inventory && saved.inventory.owned);
   houseItems = saved && saved.house ? saved.house.items.map((i) => ({ ...i, ...clampToRoom(i.x, i.z, 0.3) })) : DEFAULT_ROOM_ITEMS.map((i) => ({ ...i, id: newId() }));
   if (saved) {
@@ -344,6 +348,8 @@ function handleClick(e) {
     select(pickItem(e));
     return;
   }
+  // 친구 캐릭터를 누르면: 친구 신청 · 그 사람 섬 구경 가기 카드 (v0.42)
+  if (party) { setNdc(e); const pp = party.pickPeer(raycaster); if (pp) { showPeerCard(pp); return; } }
   route.length = 0;
   // 집 안에서 마당을 누르면: 문까지 걸어가 밖으로 나간 뒤 그 자리까지 이어서 걸어가요 (따로 나가는 버튼 없이)
   if (inside) {
@@ -511,6 +517,7 @@ function openPanel(pane) {
     panelTitle.textContent = PANES[pane];
     panel.querySelectorAll('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
     if (pane === 'space') refreshSpaceInfo();
+    if (pane === 'friends') { gbRefresh(); refreshRecent(); friendsRefresh(); }
   }
   const isItem = ['furniture', 'closet', 'shop'].includes(pane);
   rail.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('on', b.dataset.cat === pane || (b.dataset.cat === 'items' && isItem)));
@@ -980,8 +987,18 @@ function renderPeople(list) {
   list.forEach((p) => {
     const row = document.createElement('div');
     row.className = 'person-row';
-    row.innerHTML = `<i data-icon="person"></i><span></span>${p.role === 'owner' ? '<em>섬 주인</em>' : ''}${p.me ? '<em class="me">나</em>' : ''}`;
+    const st = p.room ? friendStatus(p.room) : '';
+    row.innerHTML = `<i data-icon="person"></i><span></span>${p.role === 'owner' ? '<em>섬 주인</em>' : ''}${p.me ? '<em class="me">나</em>' : ''}${st === 'friend' ? '<em class="me">친구</em>' : ''}`;
     row.querySelector('span').textContent = p.name;
+    // 만난 사람에게 바로 친구 신청 (가입한 사람끼리만)
+    if (!p.me && account && p.room && st !== 'friend') {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = st === 'sent' ? '신청 보냄' : st === 'received' ? '수락하기' : '친구 신청';
+      b.disabled = st === 'sent';
+      b.addEventListener('click', () => askFriend({ room: p.room }, p.name));
+      row.appendChild(b);
+    }
     peopleEl.appendChild(row);
   });
   fillIcons(peopleEl);
@@ -994,7 +1011,8 @@ function startParty() {
     scene, camera, viewport, avatar, chat, toast, role: partyRole, ghost,
     roomId: space === 'home' ? MY_ROOM : space === 'visit' ? visitId : 'plaza',
     getName: nameOr,
-    getWorld: () => ({ title: roomTitle, items: yardList(), house: houseList(), env: env.serialize() }),
+    getRoom: () => (account ? MY_ROOM : ''),
+    getWorld: () => ({ title: roomTitle, items: yardList(), house: houseList(), env: env.serialize(), ghosts: ghostsOk }),
     getInside: () => inside,
     // 친구 자리를 내 화면 자리로: 친구가 마당·나는 집 안이면 집 기준 자리로 바꿔서 보여 줌, 친구가 집 안·나는 마당이면 지붕에 가려 안 보임
     view: (x, z, f, peerInside) => {
@@ -1004,12 +1022,9 @@ function startParty() {
       return { x: l.x, z: l.z, f: f - world.houseT.a };
     },
     onWorld: (w) => {
-      roomTitle = w.title; showTitle();
-      // 주인이 보내 준 마당·집 안 모습 중, 지금 내가 있는 곳 것을 보여 줌
-      if (inside) { world.setYard(w.items); world.apply({ type: 'replaceAll', items: w.house }, { silent: true }); }
-      else { houseItems = w.house; world.apply({ type: 'replaceAll', items: w.items }, { silent: true }); }
-      if (w.env) { env.restore(w.env); refreshEnvButtons(); }
-      if (currentPane === 'space') refreshSpaceInfo();
+      if (ghost && w.ghosts === false) { turnGhostAway('이 섬은 지금 유령 손님을 받지 않아요'); return; }
+      showVisitWorld(w);
+      rememberVisit(visitId, w.title, party && [...party.peers.values()].find((p) => p.role === 'owner')?.name);
     },
     onPeople: renderPeople,
   });
@@ -1030,6 +1045,7 @@ function refreshSpaceUI() {
   goBtn.classList.toggle('hidden', ghost && space === 'plaza'); // 유령은 돌아갈 섬이 없어서, 대신 '가입하고 내 섬 받기' 버튼이 보여요
   resetLabel.textContent = resetName();
   document.body.dataset.space = space;
+  document.getElementById('btn-gb-open').classList.toggle('hidden', space === 'plaza');
 }
 
 // 손님에게 보이는 안내: 주인을 기다리는 중이면 화면 위쪽에 작게
@@ -1038,8 +1054,13 @@ setInterval(() => {
   let msg = '';
   if (space !== 'home' && party && !party.connected) msg = space === 'plaza' ? '광장에 연결하고 있어요…' : '친구 섬에 연결하고 있어요…';
   else if (space === 'visit' && party) {
-    if (!party.gotWorld && performance.now() - joinedAt > 2500) msg = '섬 주인이 지금 게임을 켜 두지 않았어요. 주인이 켜면 바로 만나요';
-    else if (party.gotWorld && !party.ownerHere) msg = '섬 주인이 잠깐 자리를 비웠어요';
+    const since = performance.now() - joinedAt;
+    const has = party.gotWorld || (visitInfo && visitInfo.found);
+    if (!has && since > 2500 && visitInfo && !visitInfo.loading) {
+      msg = visitInfo.error && !visitInfo.missing ? '친구 섬을 불러오지 못했어요. 조금 뒤에 다시 열어 주세요'
+        : visitInfo.missing ? '섬 주인이 지금 게임을 켜 두지 않았어요. 주인이 켜면 바로 만나요'
+        : '아직 꾸며진 적 없는 섬이에요. 주인이 게임을 켜면 바로 만나요';
+    } else if (has && !party.ownerHere && since > 1500 && since < 9000) msg = `${(visitInfo && visitInfo.owner) || '섬 주인'}님은 지금 섬에 없어요. 천천히 구경하고 방명록을 남겨 보세요`;
   }
   waitEl.textContent = msg;
   waitEl.classList.toggle('hidden', !msg);
@@ -1072,13 +1093,14 @@ document.getElementById('btn-join-cancel').addEventListener('click', () => {
 
 // ---- 공간 옮기기: 화면을 부드럽게 덮었다가, 바꾸고, 다시 걷어 냄 ----
 let moving = false;
-function moveTo(dest) {
-  if (moving || dest === space) return;
+function moveTo(dest, room) {
+  if (moving || (dest === space && (dest !== 'visit' || room === visitId))) return;
+  if (dest === 'visit' && (!room || room === MY_ROOM)) { if (room === MY_ROOM) moveTo('home'); return; }
   if (dest === 'home' && ghost) { openAuth('signup', '가입하면 바로 내 섬이 생겨요. 꾸민 섬은 계정에 저장돼요', true); return; }
   if (dest === 'plaza' && !netConfigured()) { toast('광장은 서버 연결을 마친 뒤에 열려요'); return; }
   const go = () => {
     moving = true;
-    document.getElementById('fade-text').textContent = dest === 'plaza' ? '광장으로 가는 중…' : '우리 집으로 가는 중…';
+    document.getElementById('fade-text').textContent = dest === 'plaza' ? '광장으로 가는 중…' : dest === 'visit' ? '친구 섬으로 가는 중…' : '우리 집으로 가는 중…';
     fadeEl.classList.add('on');
     setTimeout(() => {
       if (space === 'home') saveNow(false); // 떠나기 전에 내 섬 저장
@@ -1088,7 +1110,8 @@ function moveTo(dest) {
       if (currentPane === 'furniture') openPanel(null);
       undoStack.length = 0; redoStack.length = 0;
       space = dest;
-      if (dest === 'plaza') showPlaza();
+      if (dest === 'plaza') { showPlaza(); clearVisitParam(); }
+      else if (dest === 'visit') { visitId = room; setVisitParam(room); prepVisit(); }
       else {
         loadHome();
         clearVisitParam(); // 초대 링크 주소 지우기
@@ -1099,8 +1122,12 @@ function moveTo(dest) {
       showTitle(); refreshEnvButtons(); refreshSpaceUI();
       if (currentPane === 'space') refreshSpaceInfo();
       startParty();
+      if (dest === 'visit') { joinedAt = performance.now(); loadVisit(room); }
+      hidePeerCard();
+      gbRefresh(); refreshRecent();
+      if (dest === 'home') { checkNewGuestbook(); checkFriendRequests(); }
       requestAnimationFrame(() => requestAnimationFrame(() => { fadeEl.classList.remove('on'); moving = false; }));
-      toast(dest === 'plaza' ? '광장에 왔어요' : '우리 집에 왔어요');
+      toast(dest === 'plaza' ? '광장에 왔어요' : dest === 'visit' ? '친구 섬에 놀러 왔어요' : '우리 집에 왔어요');
     }, 380);
   };
   go(); // 광장은 이름을 묻지 않고 바로 감 (이름이 없으면 '나그네', 친구 메뉴에서 언제든 바꿀 수 있음)
@@ -1115,18 +1142,73 @@ function clearVisitParam() {
   q.delete('visit');
   history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : ''));
 }
-// 친구 섬에 들어가기 (초대 링크로 왔을 때): 주인이 섬 모습을 보내 줄 때까지 빈 섬으로 기다림
-function enterVisit() {
-  space = 'visit';
+function setVisitParam(room) {
+  const q = new URLSearchParams(location.search);
+  q.set('visit', room);
+  history.replaceState(null, '', `${location.pathname}?${q}`);
+}
+// ---- 친구 섬 구경 (v0.42) ----
+// 원리: 친구 섬은 서버에 저장되어 있어서, 주인이 게임을 꺼 두어도 서버에서 꺼내 보여 줘요.
+// 주인이 켜 두었으면 주인 화면이 보내 주는 지금 모습이 더 새것이라 그걸 써요 (같이 놀 수도 있고요).
+let visitInfo = null; // { loading } / { found, owner } / { error, missing }
+function prepVisit() {
   roomTitle = '친구의 섬';
+  visitInfo = { loading: true };
+  houseItems = [];
   world.apply({ type: 'replaceAll', items: [] }, { silent: true });
   avatar.restore({ x: (Math.random() - 0.5) * 3, z: 3 + Math.random() * 2, facing: 0 });
   avatar.target = null;
+}
+// 친구 섬 모습 보여 주기 (서버에서 꺼낸 것이든, 주인 화면이 보내 준 것이든)
+function showVisitWorld(w) {
+  roomTitle = w.title; showTitle();
+  // 마당·집 안 모습 중, 지금 내가 있는 곳 것을 보여 줌
+  if (inside) { world.setYard(w.items); world.apply({ type: 'replaceAll', items: w.house }, { silent: true }); }
+  else { houseItems = w.house; world.apply({ type: 'replaceAll', items: w.items }, { silent: true }); }
+  if (w.env) { env.restore(w.env); refreshEnvButtons(); }
+  if (currentPane === 'space') refreshSpaceInfo();
+}
+async function loadVisit(room) {
+  // 유령은 한 섬에 5명까지: 들어와서 3초쯤 뒤, 먼저 와 있던 유령 수를 세어 봄
+  if (ghost) setTimeout(() => {
+    if (space === 'visit' && visitId === room && party && [...party.peers.values()].filter((p) => p.ghost).length >= GHOST_LIMIT) turnGhostAway('이 섬은 유령 손님이 꽉 찼어요');
+  }, 3000);
+  let row = null;
+  try { row = await visitIsland(room); }
+  catch (e) { if (space === 'visit' && visitId === room) visitInfo = { error: true, missing: !!(e && e.missing) }; return; }
+  if (space !== 'visit' || visitId !== room) return; // 그사이 다른 곳으로 갔으면 그만
+  const s = row && migrate(row.data);
+  if (!s) { visitInfo = { found: false }; return; }
+  visitInfo = { found: true, owner: cleanName(row.nickname) };
+  if (ghost && s.settings && s.settings.ghosts === false) { turnGhostAway('이 섬은 지금 유령 손님을 받지 않아요'); return; }
+  rememberVisit(room, s.title, visitInfo.owner);
+  if (party && party.gotWorld) return; // 주인 화면이 보내 준 게 더 새것
+  showVisitWorld({
+    title: String(s.title || '친구의 섬').slice(0, 20),
+    items: s.items || [],
+    house: (s.house && s.house.items) || [],
+    env: s.env ? { ...s.env, flowing: false } : null,
+  });
+}
+// 유령 손님을 받지 않는 섬이거나 유령이 꽉 찼으면, 광장으로 살며시 보내 줌
+const GHOST_LIMIT = 5;
+function turnGhostAway(msg) {
+  if (space !== 'visit') return;
+  moveTo('plaza');
+  setTimeout(() => toast(`${msg}. 가입하면 들어갈 수 있어요`), 700);
+}
+// 친구 섬에 들어가기 (초대 링크로 왔을 때)
+function enterVisit() {
+  space = 'visit';
+  setVisitParam(visitId);
+  prepVisit();
   cam.target.copy(avatar.position).add(new THREE.Vector3(0, 1.3, 0));
   setRole('guest'); showTitle(); refreshEnvButtons(); refreshSpaceUI();
   joinedAt = performance.now();
   if (!netConfigured()) toast('아직 친구 섬과 연결할 수 없어요. 조금 뒤에 다시 열어 주세요');
   startParty();
+  loadVisit(visitId);
+  gbRefresh(); refreshRecent();
 }
 inviteInput.value = '';
 if (!netConfigured()) {
@@ -1150,6 +1232,228 @@ document.getElementById('btn-invite').addEventListener('click', () => {
   else { inviteInput.select(); toast('링크를 직접 복사해 주세요 (Ctrl+C)'); }
 });
 inviteInput.addEventListener('focus', () => inviteInput.select());
+
+// ---------- 유령 손님 받기 설정 (v0.42, 섬 주인만) ----------
+document.getElementById('ghost-toggle').addEventListener('change', (e) => {
+  ghostsOk = e.target.checked;
+  scheduleSave(); // 저장하면서, 와 있는 친구들에게도 바로 알려 줌
+  toast(ghostsOk ? '유령 손님도 구경 올 수 있어요' : '이제 가입한 친구만 놀러 올 수 있어요');
+});
+
+// ---------- 방명록 (v0.42) ----------
+// 친구 섬에서는 한마디 남기고, 내 섬에서는 남겨진 글을 봐요. 새 글이 와도 빨간 표시는 없고, 집에 오면 한 번만 조용히 알려 줘요.
+const gbCard = document.getElementById('gb-card');
+const gbList = document.getElementById('gb-list');
+const gbInput = document.getElementById('gb-input');
+const gbSend = document.getElementById('gb-send');
+const gbRoom = () => (space === 'home' ? MY_ROOM : space === 'visit' ? visitId : '');
+const gbSeenKey = () => `cozy-space-demo:gbseen:${account ? account.id : ''}`;
+const gbDay = (iso) => new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' });
+let gbShownFor = '';
+async function gbRefresh() {
+  const room = gbRoom();
+  gbCard.classList.toggle('hidden', !room);
+  if (!room) return;
+  document.getElementById('gb-title').textContent = space === 'home' ? '내 섬 방명록' : `${roomTitle} 방명록`;
+  document.getElementById('gb-write').classList.toggle('hidden', space !== 'visit' || ghost);
+  document.getElementById('gb-ghost-note').classList.toggle('hidden', space !== 'visit' || !ghost);
+  if (gbShownFor !== room) gbList.innerHTML = '<div class="gb-empty">불러오는 중…</div>';
+  let rows;
+  try { rows = await guestbookList(room); }
+  catch (e) { if (gbRoom() === room) gbList.innerHTML = `<div class="gb-empty">${e && e.missing ? '방명록은 곧 열려요' : '방명록을 불러오지 못했어요'}</div>`; return; }
+  if (gbRoom() !== room) return;
+  gbShownFor = room;
+  gbList.innerHTML = '';
+  if (!rows.length) gbList.innerHTML = `<div class="gb-empty">${space === 'home' ? '아직 남겨진 글이 없어요. 초대 링크를 보내 보세요' : '첫 번째로 한마디 남겨 보세요'}</div>`;
+  rows.forEach((g) => {
+    const el = document.createElement('div');
+    el.className = 'gb-item';
+    el.innerHTML = '<div class="gb-meta"><b></b><span></span></div><p></p>';
+    el.querySelector('b').textContent = g.author_name || '이름 없음';
+    el.querySelector('span').textContent = gbDay(g.created_at);
+    el.querySelector('p').textContent = g.body;
+    if (g.mine || (space === 'home' && account)) {
+      // 지우기는 한 번 더 눌러야 해요 (실수로 지우지 않게)
+      const del = document.createElement('button');
+      del.textContent = '지우기';
+      del.addEventListener('click', async () => {
+        if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = '한 번 더 누르면 지워요'; setTimeout(() => { del.dataset.sure = ''; del.textContent = '지우기'; }, 3000); return; }
+        del.disabled = true;
+        if (await guestbookDelete(g.id)) { toast('방명록 글을 지웠어요'); gbRefresh(); } else { toast('지우지 못했어요. 조금 뒤에 다시 해 주세요'); del.disabled = false; }
+      });
+      el.querySelector('.gb-meta').appendChild(del);
+    }
+    gbList.appendChild(el);
+  });
+  if (space === 'home' && rows[0]) { try { localStorage.setItem(gbSeenKey(), rows[0].created_at); } catch (e) { /* 무시 */ } }
+}
+let gbBusy = false;
+async function gbWrite() {
+  const body = gbInput.value.replace(/\s+/g, ' ').trim();
+  if (!body) { toast('남길 말을 적어 주세요'); gbInput.focus(); return; }
+  if (gbBusy || space !== 'visit' || ghost) return;
+  gbBusy = true; gbSend.disabled = true;
+  const r = await guestbookWrite(visitId, body, nameOr());
+  gbBusy = false; gbSend.disabled = false;
+  if (r.error) { toast(r.error); return; }
+  gbInput.value = ''; gbLeft();
+  toast('방명록에 남겼어요');
+  gbRefresh();
+}
+const gbLeft = () => { document.getElementById('gb-left').textContent = `${gbInput.value.length}/100`; };
+gbInput.addEventListener('input', gbLeft);
+gbInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); gbWrite(); } });
+gbSend.addEventListener('click', gbWrite);
+document.getElementById('btn-gb-open').addEventListener('click', () => { openPanel('friends'); setTimeout(() => gbCard.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); });
+// 집에 왔을 때: 지난번에 본 뒤로 새 글이 있으면 한 번만 알려 줌
+let gbToldTop = '';
+async function checkNewGuestbook() {
+  if (!account || !MY_ROOM) return;
+  let rows; try { rows = await guestbookList(MY_ROOM); } catch (e) { return; }
+  if (space !== 'home' || !rows.length || rows[0].created_at === gbToldTop) return;
+  let seen = ''; try { seen = localStorage.getItem(gbSeenKey()) || ''; } catch (e) { /* 무시 */ }
+  const n = rows.filter((g) => !g.mine && (!seen || g.created_at > seen)).length;
+  if (!n) return;
+  gbToldTop = rows[0].created_at;
+  setTimeout(() => toast(`방명록에 새 글이 ${n}개 있어요. 오른쪽 친구 창에서 볼 수 있어요`), 1600);
+}
+
+// ---------- 친구 맺기 (v0.42) ----------
+// 섬·광장에서 만난 사람은 캐릭터(또는 '지금 섬에 있는 사람' 목록)를 눌러 신청하고, 밖에서 아는 사람은 6글자 친구 코드로 신청해요.
+// 상대가 수락하면 서로 친구가 되고, 친구 목록의 '놀러 가기'로 그 친구 섬에 바로 가요 (친구가 게임을 꺼 두어도 구경할 수 있어요).
+// 받은 신청은 빨간 표시 없이 친구 창에만 조용히 떠요. 친구를 끊어도 상대에게 알리지 않아요.
+let friends = [];        // [{ room, nickname, title, status }]
+let friendsOff = false;  // 서버 준비 전 (SQL을 아직 안 돌렸을 때)
+const friendStatus = (room) => (friends.find((f) => f.room === room) || {}).status || '';
+let myCode = '';
+async function friendsRefresh() {
+  const on = !!account;
+  document.getElementById('ghost-friend-note').classList.toggle('hidden', on);
+  ['friend-card', 'req-card', 'sent-card'].forEach((id) => { if (!on) document.getElementById(id).classList.add('hidden'); });
+  if (!on) return;
+  try { friends = await friendList(); friendsOff = false; }
+  catch (e) { friendsOff = !!(e && e.missing); if (!friendsOff) return; friends = []; }
+  if (!myCode && !friendsOff) { try { myCode = await friendCode(); } catch (e) { /* 무시 */ } }
+  document.getElementById('my-code').textContent = myCode || (friendsOff ? '준비 중' : '저장 후 생겨요');
+  const ok = friends.filter((f) => f.status === 'friend'), got = friends.filter((f) => f.status === 'received'), sent = friends.filter((f) => f.status === 'sent');
+  document.getElementById('friend-card').classList.remove('hidden');
+  document.getElementById('friend-count').textContent = ok.length ? `${ok.length}명` : '';
+  const fl = document.getElementById('friend-list');
+  fl.innerHTML = '';
+  if (friendsOff) fl.innerHTML = '<div class="friend-empty">친구 맺기는 곧 열려요.</div>';
+  else if (!ok.length) fl.innerHTML = '<div class="friend-empty">아직 친구가 없어요. 광장에서 만난 사람을 눌러 친구 신청해 보세요.</div>';
+  ok.forEach((f) => fl.appendChild(friendRow(f, [
+    space === 'visit' && visitId === f.room ? ['지금 여기', null, true] : ['놀러 가기', () => moveTo('visit', f.room)],
+    ['끊기', async () => { if (await friendRemove(f.room)) { toast(`${f.nickname || '친구'}님과 친구를 끊었어요`); friendsRefresh(); } }, false, true],
+  ])));
+  document.getElementById('req-card').classList.toggle('hidden', !got.length);
+  const rl = document.getElementById('req-list'); rl.innerHTML = '';
+  got.forEach((f) => rl.appendChild(friendRow(f, [
+    ['수락', async () => { if (await friendAnswer(f.room, true)) { toast(`${f.nickname || '친구'}님과 친구가 됐어요`); friendsRefresh(); } }, false, false, true],
+    ['괜찮아요', async () => { if (await friendAnswer(f.room, false)) friendsRefresh(); }, false, true],
+  ])));
+  document.getElementById('sent-card').classList.toggle('hidden', !sent.length);
+  const sl = document.getElementById('sent-list'); sl.innerHTML = '';
+  sent.forEach((f) => sl.appendChild(friendRow(f, [['거두기', async () => { if (await friendRemove(f.room)) friendsRefresh(); }, false, true]])));
+  if (party) party.peopleChanged();
+}
+// 친구 한 줄: 이름 · 섬 이름 · 버튼들 [글자, 누르면 할 일, 막힘, 조용한 버튼(두 번 눌러 확인), 강조]
+function friendRow(f, buttons) {
+  const row = document.createElement('div');
+  row.className = 'friend-row';
+  row.innerHTML = '<div class="who"><b></b><span></span></div>';
+  row.querySelector('b').textContent = f.nickname || '이름 없음';
+  row.querySelector('span').textContent = f.title || '';
+  buttons.forEach(([label, fn, off, quiet, strong]) => {
+    const b = document.createElement('button');
+    b.className = quiet ? 'quiet' : strong ? 'btn btn-accent' : 'btn';
+    b.textContent = label; b.disabled = !!off;
+    b.addEventListener('click', () => {
+      if (quiet && label === '끊기' && b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '정말 끊기'; setTimeout(() => { b.dataset.sure = ''; b.textContent = label; }, 3000); return; }
+      b.disabled = true; fn && fn();
+    });
+    row.appendChild(b);
+  });
+  return row;
+}
+async function askFriend(target, name) {
+  if (!account) { openAuth('signup', '가입하면 친구를 맺고, 친구 섬에 바로 놀러 갈 수 있어요', true); return; }
+  const r = await friendRequest(target);
+  if (r.error) { toast(r.error); return; }
+  const who = name ? `${name}님` : '친구';
+  toast(r.status === 'friend' ? `${who}과(와) 친구가 됐어요` : r.status === 'already' ? (friendStatus(target.room) === 'friend' ? `이미 ${who}과(와) 친구예요` : '이미 신청을 보냈어요. 답을 기다려요') : `${who}에게 친구 신청을 보냈어요`);
+  await friendsRefresh();
+  if (peerShown) showPeerCard(peerShown);
+}
+const codeInput = document.getElementById('code-input');
+codeInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendCode(); } });
+function sendCode() {
+  const code = codeInput.value.trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code)) { toast('친구 코드 6글자를 적어 주세요'); codeInput.focus(); return; }
+  codeInput.value = '';
+  askFriend({ code });
+}
+document.getElementById('code-send').addEventListener('click', sendCode);
+document.getElementById('my-code').addEventListener('click', () => { if (myCode && navigator.clipboard) navigator.clipboard.writeText(myCode).then(() => toast('내 친구 코드를 복사했어요'), () => {}); });
+// 집에 왔을 때: 받은 친구 신청이 있으면 한 번만 조용히 알려 줌
+let reqTold = '';
+async function checkFriendRequests() {
+  await friendsRefresh();
+  const got = friends.filter((f) => f.status === 'received');
+  const key = got.map((f) => f.room).join(',');
+  if (space !== 'home' || !got.length || key === reqTold) return;
+  reqTold = key;
+  setTimeout(() => toast(`친구 신청이 ${got.length}개 와 있어요. 오른쪽 친구 창에서 볼 수 있어요`), 3600);
+}
+// 친구 캐릭터 카드
+const peerCard = document.getElementById('peer-card');
+let peerShown = null;
+function showPeerCard(p) {
+  peerShown = p;
+  const st = p.room ? friendStatus(p.room) : '';
+  document.getElementById('peer-name').textContent = p.name;
+  document.getElementById('peer-state').textContent = p.ghost ? '유령 손님' : st === 'friend' ? '친구' : p.role === 'owner' ? '섬 주인' : '';
+  const add = document.getElementById('peer-add');
+  add.classList.toggle('hidden', !account || p.ghost || !p.room || st === 'friend');
+  add.textContent = st === 'sent' ? '신청 보냄' : st === 'received' ? '친구 수락' : '친구 신청';
+  add.disabled = st === 'sent';
+  const here = space === 'visit' ? visitId : space === 'home' ? MY_ROOM : '';
+  document.getElementById('peer-visit').classList.toggle('hidden', !p.room || p.room === here);
+  peerCard.classList.remove('hidden');
+}
+const hidePeerCard = () => { peerCard.classList.add('hidden'); peerShown = null; };
+document.getElementById('peer-close').addEventListener('click', hidePeerCard);
+document.getElementById('peer-add').addEventListener('click', () => peerShown && askFriend({ room: peerShown.room }, peerShown.name));
+document.getElementById('peer-visit').addEventListener('click', () => { const p = peerShown; hidePeerCard(); if (p) moveTo('visit', p.room); });
+
+// ---------- 다녀온 섬 (v0.42) ----------
+// 한 번 놀러 간 섬은 최근 5개까지 이 브라우저에 기억해 둬요. 링크를 다시 찾지 않아도 바로 갈 수 있게.
+const recentKey = () => `cozy-space-demo:recent:${account ? account.id : 'ghost'}`;
+function readRecent() { try { const a = JSON.parse(localStorage.getItem(recentKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function rememberVisit(room, title, owner) {
+  if (!room || room === MY_ROOM) return;
+  const old = readRecent().find((r) => r.room === room) || {};
+  const list = [{ room, title: String(title || old.title || '친구의 섬').slice(0, 20), owner: cleanName(owner) || old.owner || '' }, ...readRecent().filter((r) => r.room !== room)].slice(0, 5);
+  try { localStorage.setItem(recentKey(), JSON.stringify(list)); } catch (e) { /* 무시 */ }
+  refreshRecent();
+}
+function refreshRecent() {
+  const list = readRecent().filter((r) => r && /^[a-z0-9]{1,16}$/.test(r.room) && r.room !== MY_ROOM);
+  const box = document.getElementById('recent-list');
+  document.getElementById('recent-card').classList.toggle('hidden', !list.length);
+  box.innerHTML = '';
+  list.forEach((r) => {
+    const here = space === 'visit' && r.room === visitId;
+    const b = document.createElement('button');
+    b.className = 'wide-btn';
+    b.innerHTML = `${icon('home')}<span></span><em></em>`;
+    b.querySelector('span').textContent = r.title;
+    b.querySelector('em').textContent = here ? '지금 여기' : r.owner ? `${r.owner}님` : '';
+    b.disabled = here;
+    b.addEventListener('click', () => moveTo('visit', r.room));
+    box.appendChild(b);
+  });
+}
 if (!party) renderPeople([{ name: nameOr(), role, me: true }]);
 
 // ---------- 우리 집: 문으로 들어가고 나오기 (화면 전환 없이) ----------
