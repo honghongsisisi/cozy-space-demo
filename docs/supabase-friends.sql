@@ -114,8 +114,7 @@ as $$
   order by f.created_at desc limit 300;
 $$;
 
--- 친구 신청: 섬 번호(만난 사람 → 상대가 수락해야 함) 또는 친구 코드(→ 바로 친구). 상대도 나에게 신청해 두었으면 바로 친구가 돼요
--- (v0.43: 친구 코드는 바로 친구)
+-- 친구 신청: 섬 번호(만난 사람) 또는 친구 코드로. 상대도 나에게 신청해 두었으면 바로 친구가 돼요
 -- 돌려주는 값: sent / friend / already
 create or replace function public.friend_request(p_room text, p_code text)
 returns text
@@ -136,14 +135,6 @@ begin
   end if;
   if (select count(*) from public.friends where user_id = me and status = 'friend') >= 200 then raise exception 'too_many'; end if;
   if (select count(*) from public.friends where user_id = me and status = 'sent') >= 30 then raise exception 'too_many_sent'; end if;
-  -- 친구 코드로 신청하면 바로 친구 (코드는 주인이 직접 알려 준 사람만 알아서, 알려 준 것이 곧 허락이에요)
-  if (p_room is null or p_room = '') and (select count(*) from public.friends where user_id = them and status = 'friend') >= 200 then raise exception 'too_many'; end if;
-  if p_room is null or p_room = '' then
-    insert into public.friends (user_id, friend_id, status) values (me, them, 'friend'), (them, me, 'friend')
-    on conflict (user_id, friend_id) do update set status = 'friend';
-    return 'friend';
-  end if;
-  -- 만나서 누른 신청은 상대가 수락해야 친구
   insert into public.friends (user_id, friend_id, status) values (me, them, 'sent');
   insert into public.friends (user_id, friend_id, status) values (them, me, 'received');
   return 'sent';

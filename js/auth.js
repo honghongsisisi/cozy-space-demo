@@ -3,7 +3,7 @@
 // 다음에 켤 때는 다시 로그인하지 않아도 돼요.
 // 섬은 서버의 islands 표에 한 사람당 한 줄로 저장돼요. 표의 규칙(RLS) 때문에 내 줄만 읽고 쓸 수 있어요.
 // 주소 끝에 ?localtest=1 을 붙이면 서버 없이 이 브라우저 안에서만 가짜 계정으로 시험해요 (개발용).
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.43';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=0.42';
 
 const LOCAL_TEST = new URLSearchParams(location.search).has('localtest');
 let client = null;
@@ -189,7 +189,7 @@ export async function guestbookDelete(id) {
 
 // ---------- 친구 맺기 (v0.42) ----------
 // 친구 신청 → 상대가 수락하면 서로 친구. 서로를 '섬 번호'(room)로 가리켜요.
-// 만난 사람에게는 섬 번호로 신청(상대가 수락해야 친구), 밖에서 아는 사람은 6글자 친구 코드로 바로 친구 (v0.43).
+// 만난 사람에게는 섬 번호로, 밖에서 아는 사람에게는 6글자 친구 코드로 신청해요.
 const fakeFriends = {
   all() { return fake.read('cozy-fake:friends') || []; },
   save(a) { fake.write('cozy-fake:friends', a); },
@@ -239,7 +239,6 @@ export async function friendRequest({ room = null, code = null }) {
     const cur = all.find((f) => f.user_id === me && f.friend_id === them);
     if (cur && cur.status !== 'received') return { status: 'already' };
     if (cur) { all.forEach((f) => { if ((f.user_id === me && f.friend_id === them) || (f.user_id === them && f.friend_id === me)) f.status = 'friend'; }); fakeFriends.save(all); return { status: 'friend' }; }
-    if (!room) { all.push({ user_id: me, friend_id: them, status: 'friend' }, { user_id: them, friend_id: me, status: 'friend' }); fakeFriends.save(all); return { status: 'friend' }; } // 코드는 바로 친구
     all.push({ user_id: me, friend_id: them, status: 'sent' }, { user_id: them, friend_id: me, status: 'received' });
     fakeFriends.save(all); return { status: 'sent' };
   }

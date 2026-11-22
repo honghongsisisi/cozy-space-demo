@@ -1,8 +1,8 @@
 // 하늘·시간대·날씨·조명 연출
 import * as THREE from 'three';
-import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.43';
-import { glowMat, fireMat } from './catalog.js?v=0.43';
-import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.43';
+import { SKY_KEYS, PALETTE as P } from './palette.js?v=0.42';
+import { glowMat, fireMat } from './catalog.js?v=0.42';
+import { seoulNow, sunTimes, skyTimeFor } from './realtime.js?v=0.42';
 
 const LIGHT_POOL = 4; // 밤에 실제로 빛을 내는 등불 수 (가볍게 유지하려고 제한)
 
