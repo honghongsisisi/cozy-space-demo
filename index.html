@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.42">
+  <link rel="stylesheet" href="style.css?v=0.43">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -233,10 +233,10 @@
           </div>
           <div class="info-card account-only" id="code-card">
             <div class="info-title">친구 코드</div>
-            <p class="pane-note">밖에서 아는 친구에게 내 코드를 알려 주거나, 친구 코드를 적어서 신청해요. 섬에서 만난 사람은 캐릭터를 눌러 바로 신청할 수 있어요.</p>
+            <p class="pane-note">친구 코드를 적으면 바로 친구가 돼요. 내 코드는 친한 사람에게만 알려 주세요. 섬에서 만난 사람은 캐릭터를 눌러 신청하고, 상대가 수락하면 친구가 돼요.</p>
             <label class="name-field"><span>내 별명</span><input id="my-name" maxlength="10" placeholder="친구에게 보일 이름"></label>
             <div class="info-row"><span>내 코드</span><b id="my-code" class="code">------</b></div>
-            <div class="code-row"><input id="code-input" maxlength="6" placeholder="친구 코드 6글자" autocomplete="off"><button id="code-send" class="btn btn-accent">신청</button></div>
+            <div class="code-row"><input id="code-input" maxlength="6" placeholder="친구 코드 6글자" autocomplete="off"><button id="code-send" class="btn btn-accent">친구 추가</button></div>
           </div>
           <p class="pane-note hidden" id="ghost-friend-note">가입하면 친구를 맺고, 친구 섬에 바로 놀러 갈 수 있어요.</p>
           <div class="info-card account-only" id="invite-card">
@@ -279,7 +279,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.42</span>
+      <span class="version" title="지금 보고 있는 버전">v0.43</span>
     </nav>
   </div>
 
@@ -359,6 +359,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.42"></script>
+<script type="module" src="js/main.js?v=0.43"></script>
 </body>
 </html>

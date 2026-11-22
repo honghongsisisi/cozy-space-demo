@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.42';
-import { Avatar } from './avatar.js?v=0.42';
-import { Environment } from './environment.js?v=0.42';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.42';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.42';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.42';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.42';
-import { Sound } from './sound.js?v=0.42';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.42';
-import { fmt } from './realtime.js?v=0.42';
-import { icon, fillIcons } from './icons.js?v=0.42';
-import { makeThumbnails } from './thumbs.js?v=0.42';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.42';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.43';
+import { Avatar } from './avatar.js?v=0.43';
+import { Environment } from './environment.js?v=0.43';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.43';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.43';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.43';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.43';
+import { Sound } from './sound.js?v=0.43';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.43';
+import { fmt } from './realtime.js?v=0.43';
+import { icon, fillIcons } from './icons.js?v=0.43';
+import { makeThumbnails } from './thumbs.js?v=0.43';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.43';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -1381,7 +1381,7 @@ async function askFriend(target, name) {
   const r = await friendRequest(target);
   if (r.error) { toast(r.error); return; }
   const who = name ? `${name}님` : '친구';
-  toast(r.status === 'friend' ? `${who}과(와) 친구가 됐어요` : r.status === 'already' ? (friendStatus(target.room) === 'friend' ? `이미 ${who}과(와) 친구예요` : '이미 신청을 보냈어요. 답을 기다려요') : `${who}에게 친구 신청을 보냈어요`);
+  toast(r.status === 'friend' ? (target.code ? '친구가 됐어요. 친구 목록에서 놀러 가기를 눌러 보세요' : `${who}과(와) 친구가 됐어요`) : r.status === 'already' ? (friendStatus(target.room) === 'friend' ? `이미 ${who}과(와) 친구예요` : '이미 신청을 보냈어요. 답을 기다려요') : `${who}에게 친구 신청을 보냈어요`);
   await friendsRefresh();
   if (peerShown) showPeerCard(peerShown);
 }
