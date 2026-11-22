@@ -1,8 +1,8 @@
 // 머리 큰 귀여운 아바타와 걷기·점프·인사 움직임
 import * as THREE from 'three';
-import { mat } from './catalog.js?v=0.49';
-import { PALETTE as P } from './palette.js?v=0.49';
-import { PLOT_RADIUS, SEA_RADIUS, WATER_Y } from './world.js?v=0.49';
+import { mat } from './catalog.js?v=0.50';
+import { PALETTE as P } from './palette.js?v=0.50';
+import { PLOT_RADIUS, SEA_RADIUS, WATER_Y } from './world.js?v=0.50';
 
 const SPEED = 4.2;     // 걷기 속도
 const RUN_SPEED = 8.4; // 달리기 속도 (걷기의 2배)

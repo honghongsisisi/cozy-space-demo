@@ -2,8 +2,8 @@
 // 물건을 바꿀 때는 꼭 apply(action)을 거칩니다. 나중에 여러 명이 함께 놀 때는
 // 이 action을 서버로 보내고, 남이 보낸 action도 똑같이 apply하면 됩니다.
 import * as THREE from 'three';
-import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.49';
-import { PALETTE as P } from './palette.js?v=0.49';
+import { buildItem, ITEM_BY_TYPE, mat, glowMat, HOUSE_W, HOUSE_D, HOUSE_H, roofMaterial } from './catalog.js?v=0.50';
+import { PALETTE as P } from './palette.js?v=0.50';
 
 export const PLOT_RADIUS = 20; // 둥근 섬의 반지름 (v0.20에서 10 → 20, 지름 2배)
 export const SEA_RADIUS = PLOT_RADIUS + 9; // 헤엄쳐 갈 수 있는 바다의 끝 (섬 테두리에서 9칸, v0.48)

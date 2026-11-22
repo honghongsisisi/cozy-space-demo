@@ -4,7 +4,7 @@
 // 늦게 눌러도 벌칙은 없어요. "아쉽게 놓쳤어요" 하고 다시 던질 뿐이에요.
 // 잡은 물고기는 바구니에 들어가고(팔면 조개 = 게임 돈), 도감에는 종류마다 처음 잡은 기록과 가장 큰 크기가 남아요.
 import * as THREE from 'three';
-import { WATER_Y } from './world.js?v=0.49';
+import { WATER_Y } from './world.js?v=0.50';
 
 // 물고기 8종. 언제(when) 잘 나오는지만 조금씩 달라요. 매일 반복되니 '놓치면 끝'인 물고기는 없어요.
 //  when: any 언제나 / day 낮 / night 밤 / rain 비 오는 날 / clearDay 맑은 낮
