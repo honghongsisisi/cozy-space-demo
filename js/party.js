@@ -8,13 +8,14 @@
 //   hi    : 들어왔어요 (손님은 섬 꾸밈을 받을 때까지 3초마다 다시 보냄)
 //   st    : 내 위치·방향·달리는 중인지 (움직이는 동안 1초에 6번쯤, 가만히 있으면 3초에 한 번)
 //   act   : 점프 / 인사
+//   (st에 p·h가 있으면 가구를 쓰는 중: p=자세 이름, h=앉은 높이. v0.49)
 //   chat  : 채팅 한 줄
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.47';
-import { PRESETS } from './chat.js?v=0.47';
-import { openLink, netConfigured } from './net.js?v=0.47';
+import { Avatar } from './avatar.js?v=0.49';
+import { PRESETS } from './chat.js?v=0.49';
+import { openLink, netConfigured } from './net.js?v=0.49';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -37,6 +38,7 @@ export function saveName(n) { try { localStorage.setItem(NAME_KEY, n); } catch (
 export function cleanName(n) { return String(n || '').replace(/\s+/g, ' ').trim().slice(0, 10); }
 export { netConfigured };
 
+const POSES = new Set(['sit', 'doze', 'lie', 'sleep', 'read', 'look']); // 가구 쓰는 자세 (v0.49)
 const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0; };
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -106,8 +108,11 @@ export class Party {
 
   sendState(force) {
     const a = this.avatar;
-    const s = { t: 'st', x: r2(a.position.x), z: r2(a.position.z), f: r2(a.facing), r: a.running ? 1 : 0, s: this.getInside() ? 1 : 0 };
-    const key = `${s.x},${s.z},${s.f},${s.r},${s.s}`;
+    const pose = a.pose;
+    const px = pose ? pose.x : a.position.x, pz = pose ? pose.z : a.position.z, pf = pose ? pose.facing : a.facing;
+    const s = { t: 'st', x: r2(px), z: r2(pz), f: r2(pf), r: a.running ? 1 : 0, s: this.getInside() ? 1 : 0 };
+    if (pose) { s.p = pose.kind; s.h = r2(pose.h || 0); }
+    const key = `${s.x},${s.z},${s.f},${s.r},${s.s},${s.p || ''}`;
     const now = performance.now();
     if (!force && key === this.lastSent.key && now - this.lastSent.t < 3000) return; // 그대로면 3초에 한 번만
     if (!force && now - this.lastSent.t < 160) return; // 움직여도 1초에 6번까지만
@@ -155,6 +160,7 @@ export class Party {
       case 'st':
         p.tx = num(m.x, 30); p.tz = num(m.z, 30); p.f = num(m.f, 10); p.r = !!m.r;
         p.inside = !!m.s;
+        p.pose = !p.ghost && POSES.has(m.p) ? m.p : ''; p.ph = num(m.h, 3);
         if (!p.placed) { p.placed = true; p.jumpNext = true; }
         break;
       case 'act':
@@ -275,7 +281,13 @@ export class Party {
       if (p.jumpNext) { av.restore({ x: tx, z: tz, facing: tf }); av.target = null; p.jumpNext = false; }
       av.root.visible = true;
       const d = Math.hypot(tx - pos.x, tz - pos.z);
-      if (d > 8) { av.restore({ x: tx, z: tz, facing: tf }); av.target = null; }
+      // 가구를 쓰는 중이면 그 자리에서 같은 자세로 (앉기·눕기 등)
+      if (p.pose) {
+        const ap = av.pose;
+        if (!ap || ap.kind !== p.pose || Math.hypot(ap.x - tx, ap.z - tz) > 0.05) av.setPose({ kind: p.pose, x: tx, z: tz, facing: tf, h: p.ph });
+      } else if (av.pose) av.clearPose(true);
+      if (p.pose) { /* 자세는 avatar가 알아서 */ }
+      else if (d > 8) { av.restore({ x: tx, z: tz, facing: tf }); av.target = null; }
       else if (d > 0.1) { av.moveTo(tx, tz); av.running = p.r || d > 2.5; }
       else if (!av.target) {
         // 멈춰 있으면 친구가 보는 방향으로 천천히 몸을 돌림

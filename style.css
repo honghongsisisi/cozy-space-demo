@@ -483,3 +483,18 @@ body.ghost .account-only { display: none; }
 body[data-space="plaza"] .rail-btn[data-cat="guestbook"] { display: none; }
 .pane[data-pane="guestbook"] .gb-list { max-height: none; }
 .gb-msg { color: var(--danger); }
+
+/* 가구 사용하기 카드 (v0.49): 가구 바로 위에 작게 떠요 */
+.use-card {
+  position: absolute; z-index: 4; transform: translate(-50%, -100%); min-width: 150px;
+  background: rgba(255, 253, 249, 0.96); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 8px 10px 10px; display: grid; gap: 6px;
+}
+.use-card::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg);
+  background: rgba(255, 253, 249, 0.96); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.use-head { display: flex; align-items: center; gap: 6px; }
+.use-head b { font-size: 13px; color: var(--muted); font-weight: 600; }
+.use-head .icon-btn { margin-left: auto; }
+.use-actions { display: grid; gap: 5px; }
+.use-actions .btn { justify-content: center; white-space: nowrap; }

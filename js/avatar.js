@@ -1,8 +1,8 @@
 // 머리 큰 귀여운 아바타와 걷기·점프·인사 움직임
 import * as THREE from 'three';
-import { mat } from './catalog.js?v=0.47';
-import { PALETTE as P } from './palette.js?v=0.47';
-import { PLOT_RADIUS } from './world.js?v=0.47';
+import { mat } from './catalog.js?v=0.49';
+import { PALETTE as P } from './palette.js?v=0.49';
+import { PLOT_RADIUS } from './world.js?v=0.49';
 
 const SPEED = 4.2;     // 걷기 속도
 const RUN_SPEED = 8.4; // 달리기 속도 (걷기의 2배)
@@ -151,6 +151,148 @@ export class Avatar {
     this.running = false; // 달리는 중인지
     this.waveT = 0;
     this.moving = false;
+    this.pose = null;   // 가구 사용 중인 자세 (v0.49) { kind, x, z, facing, h, exit }
+    this.unpose = null; // 자세를 풀고 일어나는 중 (0.3초) { fx, fz, tx, tz, t }
+    this.lift = 0;      // 일어날 때 몸 높이가 툭 튀지 않게 천천히 줄어드는 높이
+
+    // 책 읽기용 작은 책 (평소엔 숨김)
+    const book = new THREE.Group();
+    const cover = new THREE.MeshLambertMaterial({ color: P.book[1] });
+    const paper = new THREE.MeshLambertMaterial({ color: 0xfaf4ea, emissive: 0xfaf4ea, emissiveIntensity: 0.15 });
+    [-1, 1].forEach((sx) => {
+      const half = new THREE.Group(); half.rotation.y = sx * -0.35; book.add(half);
+      const c = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.18, 0.012), cover); c.position.set(sx * 0.065, 0, 0); half.add(c);
+      const pg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.17, 0.014), paper); pg.position.set(sx * 0.062, 0, 0.012); half.add(pg);
+    });
+    book.position.set(0, 1.1, 0.3); book.rotation.x = -0.75;
+    book.visible = false;
+    this.body.add(book);
+    this.book = book;
+
+    // 이불 덮고 자기용 이불 (침대 이불과 같은 색, 평소엔 숨김)
+    const quilt = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.36, 1.42), new THREE.MeshLambertMaterial({ color: P.fabric2 }));
+    quilt.castShadow = true; quilt.visible = false;
+    this.root.add(quilt);
+    this.quilt = quilt;
+
+    // 졸 때 머리 위로 천천히 떠오르는 작은 z 글자 3개
+    const zc = document.createElement('canvas'); zc.width = zc.height = 64;
+    const zx = zc.getContext('2d');
+    zx.fillStyle = '#8b6a56'; zx.font = 'bold 46px sans-serif'; zx.textAlign = 'center'; zx.textBaseline = 'middle';
+    zx.fillText('z', 32, 34);
+    const zTex = new THREE.CanvasTexture(zc);
+    this.zz = [0, 1, 2].map(() => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: zTex, transparent: true, opacity: 0, depthWrite: false }));
+      sp.visible = false;
+      this.root.add(sp);
+      return sp;
+    });
+  }
+
+  // ---- 가구 사용하기 (v0.49) ----
+  // kind: sit(앉기) · doze(졸기) · lie(눕기) · sleep(이불 덮고 자기) · read(책 읽기) · look(창밖 보기)
+  // x, z, facing: 자세를 잡을 자리와 방향 / h: 앉는 자리·눕는 자리 높이 / exit: 일어나서 설 자리
+  setPose(p) {
+    const far = Math.hypot(this.root.position.x - p.x, this.root.position.z - p.z) > 2.5;
+    this.pose = { ...p, fx: this.root.position.x, fz: this.root.position.z, ff: this.facing, t: far ? 1 : 0 };
+    this.unpose = null;
+    this.target = null; this.running = false; this.waveT = 0;
+  }
+  // 일어나기: 설 자리(exit)로 0.3초 동안 부드럽게 옮겨 가요. quick이면 바로
+  clearPose(quick) {
+    const p = this.pose;
+    if (!p) return;
+    this.pose = null;
+    this.book.visible = false; this.quilt.visible = false;
+    this.zz.forEach((z) => { z.visible = false; });
+    this.lift = quick ? 0 : this.body.position.y - this.y;
+    const ex = p.exit || { x: this.root.position.x, z: this.root.position.z };
+    if (quick) { this.root.position.set(ex.x, 0, ex.z); return; }
+    this.unpose = { fx: this.root.position.x, fz: this.root.position.z, tx: ex.x, tz: ex.z, t: 0 };
+  }
+  get busy() { return !!this.unpose; } // 일어나는 중에는 잠깐 기다림
+
+  stepPose(dt) {
+    const p = this.pose, sm = (rate) => 1 - Math.exp(-dt * rate);
+    const t = performance.now() / 1000;
+    // 자리로 옮겨 앉기 (0.35초)
+    p.t = Math.min(1, p.t + dt / 0.35);
+    const e = p.t * p.t * (3 - 2 * p.t);
+    this.root.position.x = lerp(p.fx, p.x, e);
+    this.root.position.z = lerp(p.fz, p.z, e);
+    let diff = p.facing - p.ff; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    this.facing = p.ff + diff * e;
+    this.root.rotation.y = this.facing;
+    this.moving = false; this.y = 0; this.vy = 0; this.walkBlend = 0; this.runBlend = 0;
+
+    const k = sm(7);
+    const set = (o, prop, v, kk = k) => { o.rotation[prop] = lerp(o.rotation[prop], v, kk); };
+    const sit = p.kind === 'sit' || p.kind === 'doze';
+    const lie = p.kind === 'lie' || p.kind === 'sleep';
+    const sleepy = p.kind === 'doze' || p.kind === 'sleep';
+    const breath = Math.sin(t * (sleepy ? 1.2 : 1.9)) * (sleepy ? 0.012 : 0.007);
+    // 몸 높이·기울기
+    let by = breath, bx = 0;
+    if (sit) { by = p.h + 0.07 - 0.86 + breath; bx = p.kind === 'doze' ? 0.12 : 0.04; }
+    if (lie) { by = p.h + 0.15 + breath * 0.6; bx = -Math.PI / 2; }
+    if (p.kind === 'read') bx = 0.04;
+    if (p.kind === 'look') bx = 0.07;
+    this.body.position.y = lerp(this.body.position.y, by, sm(8));
+    set(this.body, 'x', bx, sm(6));
+    set(this.body, 'y', 0); set(this.body, 'z', 0);
+    // 다리
+    const hip = sit ? -1.5 : 0, knee = sit ? 1.45 : 0;
+    const swing = sit && p.kind === 'sit' ? Math.sin(t * 1.3) * 0.08 : 0; // 앉아서 발을 살랑살랑
+    set(this.legL, 'x', hip + swing); set(this.legR, 'x', hip - swing);
+    set(this.kneeL, 'x', knee + swing); set(this.kneeR, 'x', knee - swing);
+    // 팔
+    let ax = 0, az = 0.07, el = -0.05;
+    if (sit) { ax = -0.45; az = 0.12; el = -0.75; }                  // 손은 무릎 위에
+    if (lie) { ax = 0.05; az = 0.16; el = -0.15; }                   // 눕기: 팔은 몸 옆에 편하게
+    if (p.kind === 'read') { ax = -0.95; az = 0.32; el = -1.05; }    // 두 손으로 책
+    if (p.kind === 'look') { ax = -0.3; az = 0.18; el = -0.55; }     // 창틀에 손을 살짝
+    set(this.armL, 'x', ax); set(this.armR, 'x', ax);
+    set(this.armL, 'z', az); set(this.armR, 'z', -az);
+    set(this.elbowL, 'x', el); set(this.elbowR, 'x', el);
+    // 머리
+    let hx = 0, hy = 0, hz = 0;
+    if (p.kind === 'sit') { hy = Math.sin(t * 0.37) * 0.15; hz = Math.sin(t * 0.6) * 0.04; }
+    if (p.kind === 'doze') { hx = 0.32 + Math.max(0, Math.sin(t * 0.8)) * 0.18; hz = 0.12; } // 꾸벅꾸벅
+    if (p.kind === 'lie') { hy = Math.sin(t * 0.3) * 0.25; }
+    if (p.kind === 'sleep') { hy = 0.35; }
+    if (p.kind === 'read') { hx = 0.38 + Math.sin(t * 0.5) * 0.03; hy = Math.sin(t * 0.9) * 0.08; } // 줄을 따라 읽는 듯
+    if (p.kind === 'look') { hx = -0.05; hy = Math.sin(t * 0.25) * 0.3; hz = Math.sin(t * 0.4) * 0.04; }
+    set(this.head, 'x', hx, sm(4)); set(this.head, 'y', hy, sm(3)); set(this.head, 'z', hz, sm(4));
+    // 눈: 졸고 자는 동안은 감고, 아니면 깜빡임
+    if (sleepy) this.eyes.forEach((ey) => { ey.scale.y = lerp(ey.scale.y, 0.1, sm(5)); });
+    else this.blink(dt);
+    // 책 · 이불
+    this.book.visible = p.kind === 'read' && p.t > 0.6;
+    this.quilt.visible = p.kind === 'sleep' && p.t > 0.8;
+    if (this.quilt.visible) this.quilt.position.set(0, p.h + 0.14, -0.5); // 매트리스 위부터 몸을 폭 덮는 높이
+    // z z z
+    const zOn = sleepy && p.t >= 1;
+    if (zOn) {
+      const hp = this.root.worldToLocal(this.head.getWorldPosition(new THREE.Vector3()));
+      this.zz.forEach((z, i) => {
+        const q = ((t / 3.2) + i / 3) % 1;
+        z.visible = true;
+        z.position.set(hp.x + 0.15 + q * 0.18, hp.y + 0.25 + q * 0.55, hp.z + (lie ? 0.15 : 0));
+        z.scale.setScalar(0.12 + q * 0.1);
+        z.material.opacity = Math.sin(q * Math.PI) * 0.75;
+      });
+    } else this.zz.forEach((z) => { z.visible = false; });
+  }
+
+  blink(dt) {
+    this.blinkT -= dt;
+    let open = 1;
+    if (this.blinkT < 0) {
+      const p = -this.blinkT / 0.14;
+      open = p >= 1 ? 1 : Math.abs(1 - p * 2) * 0.9 + 0.1;
+      if (p >= 1) this.blinkT = 2 + Math.random() * 3 + (Math.random() < 0.2 ? -1.7 : 0); // 가끔 두 번 연달아
+    }
+    this.eyes.forEach((e) => { e.scale.y = open; });
   }
 
   get position() { return this.root.position; }
@@ -205,8 +347,18 @@ export class Avatar {
   }
 
   step(dt, input, cameraYaw, colliders) {
+    if (this.pose) { this.stepPose(dt); return; }
     const p = this.root.position;
     let dx = 0, dz = 0;
+    // 일어나는 중: 설 자리로 부드럽게 옮겨 가요 (이 동안은 부딪힘·이동 없이)
+    if (this.unpose) {
+      const u = this.unpose;
+      u.t = Math.min(1, u.t + dt / 0.3);
+      const e = u.t * u.t * (3 - 2 * u.t);
+      p.x = lerp(u.fx, u.tx, e); p.z = lerp(u.fz, u.tz, e);
+      if (u.t >= 1) this.unpose = null;
+      input = { x: 0, y: 0 }; colliders = [];
+    }
 
     // 키보드 이동 (카메라가 보는 방향 기준)
     if (input.x || input.y) {
@@ -303,21 +455,15 @@ export class Avatar {
     const idle = 1 - wb;
     const breath = Math.sin(t * 1.9) * 0.008 * idle;
     const bob = Math.abs(s1) * lerp(0.025, 0.09, rb) * wb;
-    this.body.position.y = this.y + bob + breath;
+    this.lift = lerp(this.lift, 0, 1 - Math.exp(-dt * 7));
+    this.body.position.y = this.y + bob + breath + this.lift;
     this.armL.rotation.z += Math.sin(t * 1.9) * 0.01 * idle;
     this.head.rotation.z = lerp(this.head.rotation.z, s1 * 0.035 * wb + Math.sin(t * 0.6) * 0.035 * idle, sm(8));
     this.head.rotation.y = lerp(this.head.rotation.y, Math.sin(t * 0.37) * 0.12 * idle, sm(4));
     this.head.rotation.x = lerp(this.head.rotation.x, -0.12 * rb, sm(8)); // 달릴 때 고개는 앞을 봄
 
     // 눈 깜빡임: 2~5초마다 0.14초 동안
-    this.blinkT -= dt;
-    let open = 1;
-    if (this.blinkT < 0) {
-      const p = -this.blinkT / 0.14;
-      open = p >= 1 ? 1 : Math.abs(1 - p * 2) * 0.9 + 0.1;
-      if (p >= 1) this.blinkT = 2 + Math.random() * 3 + (Math.random() < 0.2 ? -1.7 : 0); // 가끔 두 번 연달아
-    }
-    this.eyes.forEach((e) => { e.scale.y = open; });
+    this.blink(dt);
 
     // 인사
     if (this.waveT > 0) {
@@ -342,10 +488,13 @@ export class Avatar {
   }
 
   serialize() {
-    return { x: this.root.position.x, z: this.root.position.z, facing: this.facing };
+    const ex = this.pose && this.pose.exit; // 앉아 있을 땐 일어나서 설 자리로 저장
+    return { x: ex ? ex.x : this.root.position.x, z: ex ? ex.z : this.root.position.z, facing: this.facing };
   }
   restore(s) {
     if (!s) return;
+    if (this.pose) this.clearPose(true);
+    this.unpose = null; this.lift = 0;
     this.root.position.set(s.x || 0, 0, s.z || 0);
     this.facing = s.facing || 0;
     this.root.rotation.y = this.facing;
