@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.42';
-import { Avatar } from './avatar.js?v=0.42';
-import { Environment } from './environment.js?v=0.42';
-import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.42';
-import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.42';
-import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.42';
-import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.42';
-import { Sound } from './sound.js?v=0.42';
-import { Chat, PRESETS, FONTS } from './chat.js?v=0.42';
-import { fmt } from './realtime.js?v=0.42';
-import { icon, fillIcons } from './icons.js?v=0.42';
-import { makeThumbnails } from './thumbs.js?v=0.42';
-import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.42';
+import { World, DEFAULT_ITEMS, PLAZA_ITEMS, DEFAULT_ROOM_ITEMS, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_D, ROOM_H, snap, clampToPlot, clampToRoom, newId } from './world.js?v=0.43';
+import { Avatar } from './avatar.js?v=0.43';
+import { Environment } from './environment.js?v=0.43';
+import { ITEMS, ITEM_BY_TYPE, ITEM_GROUPS, buildItem } from './catalog.js?v=0.43';
+import { restoreOwned, serializeOwned, ownedOf, countUsed } from './inventory.js?v=0.43';
+import { saveState, loadState, packState, userKey, takeLegacy, migrate } from './storage.js?v=0.43';
+import { authReady, currentUser, signIn, signUp, signOut, setNickname, loadIsland, saveIsland, visitIsland, guestbookList, guestbookWrite, guestbookDelete, friendCode, friendList, friendRequest, friendAnswer, friendRemove } from './auth.js?v=0.43';
+import { Sound } from './sound.js?v=0.43';
+import { Chat, PRESETS, FONTS } from './chat.js?v=0.43';
+import { fmt } from './realtime.js?v=0.43';
+import { icon, fillIcons } from './icons.js?v=0.43';
+import { makeThumbnails } from './thumbs.js?v=0.43';
+import { Party, savedName, saveName, cleanName, netConfigured } from './party.js?v=0.43';
 
 fillIcons(); // HTML 속 <i data-icon> 자리에 선 아이콘 넣기
 
@@ -322,6 +322,19 @@ function pickItem(e) {
   return id;
 }
 
+// 누른 자리에 딱 맞은 물건 종류 (없으면 '')
+// (휴대폰에서는 가는 기둥을 정확히 누르기 어려워서, 못 맞혔으면 누른 땅에서 0.8칸 안의 물건도 쳐 줘요)
+function clickedType(e) {
+  setNdc(e);
+  let id = null;
+  for (const hit of raycaster.intersectObject(world.root, true)) { id = world.findItemFromObject(hit.object); if (id) break; }
+  if (!id) {
+    const p = groundPoint(e);
+    let best = 0.8;
+    if (p) world.items.forEach(({ data }) => { const d = Math.hypot(data.x - p.x, data.z - p.z); if (d < best) { best = d; id = data.id; } });
+  }
+  return id && world.items.get(id) ? world.items.get(id).data.type : '';
+}
 function clickedDoor(e) {
   if (space === 'plaza') return null;
   setNdc(e);
@@ -350,6 +363,8 @@ function handleClick(e) {
   }
   // 친구 캐릭터를 누르면: 친구 신청 · 그 사람 섬 구경 가기 카드 (v0.42)
   if (party) { setNdc(e); const pp = party.pickPeer(raycaster); if (pp) { showPeerCard(pp); return; } }
+  // 우체통을 누르면 방명록 (v0.43)
+  if (space !== 'plaza' && clickedType(e) === 'mailbox') { openPanel('guestbook'); return; }
   route.length = 0;
   // 집 안에서 마당을 누르면: 문까지 걸어가 밖으로 나간 뒤 그 자리까지 이어서 걸어가요 (따로 나가는 버튼 없이)
   if (inside) {
@@ -505,7 +520,7 @@ const panelTitle = document.getElementById('panel-title');
 const rail = document.getElementById('rail');
 const railSub = document.getElementById('rail-sub');
 const PANES = {
-  space: '내 공간', friends: '친구', manage: '관리',
+  space: '내 공간', friends: '친구', guestbook: '방명록', manage: '관리',
   furniture: '아이템 · 가구', closet: '아이템 · 옷장', shop: '아이템 · 상점',
 };
 let panelOpen = false, currentPane = null;
@@ -517,7 +532,8 @@ function openPanel(pane) {
     panelTitle.textContent = PANES[pane];
     panel.querySelectorAll('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
     if (pane === 'space') refreshSpaceInfo();
-    if (pane === 'friends') { gbRefresh(); refreshRecent(); friendsRefresh(); }
+    if (pane === 'friends') { refreshRecent(); friendsRefresh(); }
+    if (pane === 'guestbook') gbRefresh();
   }
   const isItem = ['furniture', 'closet', 'shop'].includes(pane);
   rail.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('on', b.dataset.cat === pane || (b.dataset.cat === 'items' && isItem)));
@@ -1045,7 +1061,7 @@ function refreshSpaceUI() {
   goBtn.classList.toggle('hidden', ghost && space === 'plaza'); // 유령은 돌아갈 섬이 없어서, 대신 '가입하고 내 섬 받기' 버튼이 보여요
   resetLabel.textContent = resetName();
   document.body.dataset.space = space;
-  document.getElementById('btn-gb-open').classList.toggle('hidden', space === 'plaza');
+  if (space === 'plaza' && currentPane === 'guestbook') openPanel(null); // 광장에는 방명록이 없어요
 }
 
 // 손님에게 보이는 안내: 주인을 기다리는 중이면 화면 위쪽에 작게
@@ -1304,7 +1320,6 @@ const gbLeft = () => { document.getElementById('gb-left').textContent = `${gbInp
 gbInput.addEventListener('input', gbLeft);
 gbInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); gbWrite(); } });
 gbSend.addEventListener('click', gbWrite);
-document.getElementById('btn-gb-open').addEventListener('click', () => { openPanel('friends'); setTimeout(() => gbCard.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); });
 // 집에 왔을 때: 지난번에 본 뒤로 새 글이 있으면 한 번만 알려 줌
 let gbToldTop = '';
 async function checkNewGuestbook() {
@@ -1315,7 +1330,7 @@ async function checkNewGuestbook() {
   const n = rows.filter((g) => !g.mine && (!seen || g.created_at > seen)).length;
   if (!n) return;
   gbToldTop = rows[0].created_at;
-  setTimeout(() => toast(`방명록에 새 글이 ${n}개 있어요. 오른쪽 친구 창에서 볼 수 있어요`), 1600);
+  setTimeout(() => toast(`방명록에 새 글이 ${n}개 있어요. 오른쪽 방명록에서 볼 수 있어요`), 1600);
 }
 
 // ---------- 친구 맺기 (v0.42) ----------
