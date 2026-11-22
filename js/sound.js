@@ -178,4 +178,35 @@ export class Sound {
     src.connect(bp).connect(lp).connect(g).connect(this.master);
     src.start(t, Math.random() * 0.8, dur + 0.02);
   }
+  // ---- 물소리 (v0.48): 헤엄·낚시 ----
+  // 원리: 잡음을 '낮은 음만 남기는 필터'에 통과시키면 물이 '촤-' 하고 갈라지는 소리처럼 들려요.
+  // 필터 높이를 시간에 따라 내리면 물보라가 가라앉는 느낌이 나요. 모두 작고 짧게.
+  water(vol, dur, f0, f1) {
+    if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+    const c = this.ctx, t = c.currentTime;
+    const src = c.createBufferSource(); src.buffer = this.noise; src.playbackRate.value = 0.7;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.7;
+    lp.frequency.setValueAtTime(f0, t); lp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(lp).connect(g).connect(this.master);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  // 작은 방울 '퐁': 짧은 음이 위로 살짝 올라가며 사라짐
+  blip(f, vol = 0.3, dur = 0.12) {
+    if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.8, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  splash(big) { this.water(big ? 0.9 : 0.4, big ? 0.7 : 0.35, 1800, 250); }   // 바다에 뛰어들 때
+  swimStroke() { this.water(0.16, 0.4, 900, 300); }                            // 팔을 저을 때 (아주 작게)
+  fishPlop() { this.blip(320, 0.28, 0.1); this.water(0.2, 0.25, 1400, 400); }   // 찌가 물에 닿을 때
+  fishBite() { this.blip(260, 0.35, 0.09); setTimeout(() => this.blip(300, 0.3, 0.09), 130); } // 찌가 쑥
+  fishCatch() { this.water(0.45, 0.45, 2200, 500); setTimeout(() => this.blip(520, 0.18, 0.18), 250); } // 낚아 올릴 때
 }

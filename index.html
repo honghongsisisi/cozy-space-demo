@@ -118,6 +118,10 @@
       <div id="use-card" class="use-card hidden">
         <div class="use-head"><b id="use-name"></b><button id="use-close" class="icon-btn" title="닫기"><i data-icon="close"></i></button></div>
         <div id="use-actions" class="use-actions"></div>
+      <!-- 땅에 서서 바다를 누르면: 낚시하기 / 헤엄쳐 가기 (v0.49) -->
+      <div id="sea-menu" class="sea-menu hidden">
+        <button id="sea-fish" class="btn btn-accent"><i data-icon="fish"></i>낚시하기</button>
+        <button id="sea-swim" class="btn"><i data-icon="wave"></i>헤엄쳐 가기</button>
       </div>
       <div id="fade" class="fade"><span id="fade-text"></span></div>
       <div id="toast"></div>
@@ -169,6 +173,29 @@
         <!-- 아이템 > 상점 -->
         <div class="pane hidden" data-pane="shop">
           <div class="empty-card"><i class="empty-ico" data-icon="bag"></i><b>상점은 준비 중이에요</b><p>입어 보고, 놓아 보고 살 수 있는 상점을 만들 자리예요.</p></div>
+        </div>
+
+        <!-- 아이템 > 물고기 (v0.48): 조개(게임 돈) · 바구니 · 도감 -->
+        <div class="pane hidden" data-pane="fish">
+          <div class="info-card coin-card">
+            <i data-icon="shell"></i><span>가진 조개</span><b id="fish-coins">0</b>
+          </div>
+          <div class="info-card">
+            <div class="info-title">바구니 <span class="count" id="fish-basket-count"></span></div>
+            <div id="fish-basket" class="fish-list"></div>
+            <button id="fish-sell-all" class="wide-btn accent hidden"></button>
+            <p class="pane-note hidden" id="fish-away">물고기 팔기는 내 섬에서 할 수 있어요.</p>
+          </div>
+          <div class="info-card">
+            <div class="info-title">물고기 도감 <span class="count" id="fish-dex-count"></span></div>
+            <div id="fish-dex" class="dex-grid"></div>
+          </div>
+          <ul class="pane-tip">
+            <li>섬 가장자리 모래밭에서 바다를 누르면 낚시할 수 있어요</li>
+            <li>찌가 쑥 들어가면 화면을 누르거나 <kbd>Space</kbd></li>
+            <li>시간과 날씨에 따라 나오는 물고기가 조금씩 달라요</li>
+            <li>모은 조개로 살 수 있는 가구 상점은 곧 열려요</li>
+          </ul>
         </div>
 
         <!-- 내 공간 -->
@@ -286,6 +313,7 @@
         <div class="rail-sub" id="rail-sub">
           <button data-sub="furniture">가구</button>
           <button data-sub="closet">옷장</button>
+          <button data-sub="fish">물고기</button>
           <button data-sub="shop">상점</button>
         </div>
       </div>
@@ -336,6 +364,8 @@
       <li><b>되돌리기</b> <kbd>Ctrl</kbd>+<kbd>Z</kbd> · 다시 하기 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></li>
       <li><b>분위기</b> 위쪽에서 시간과 날씨를 바꿔요. 현재 시간을 고르면 한국 시간과 계절에 맞춰 하늘이 흘러요</li>
       <li><b>채팅</b> <kbd>Enter</kbd>로 입력줄을 열고 말을 쓰면 머리 위에 말풍선이 떠요</li>
+      <li><b>헤엄치기</b> 섬 밖 바다로 걸어 나가거나 바다를 누르면 첨벙 뛰어들어 헤엄쳐요</li>
+      <li><b>낚시</b> 섬 가장자리 모래밭에서 바다를 누르고 '낚시하기'. 찌가 쑥 들어가면 화면을 눌러요</li>
       <li><b>사진</b> 위쪽 사진 버튼</li>
     </ul>
     <p class="muted">꾸민 섬은 내 계정에 자동으로 저장돼요. 다른 컴퓨터나 휴대폰에서도 같은 이메일로 로그인하면 그대로 나와요.</p>

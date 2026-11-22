@@ -2,10 +2,13 @@
 import * as THREE from 'three';
 import { mat } from './catalog.js?v=0.49';
 import { PALETTE as P } from './palette.js?v=0.49';
-import { PLOT_RADIUS } from './world.js?v=0.49';
+import { PLOT_RADIUS, SEA_RADIUS, WATER_Y } from './world.js?v=0.49';
 
 const SPEED = 4.2;     // 걷기 속도
 const RUN_SPEED = 8.4; // 달리기 속도 (걷기의 2배)
+const SWIM_SPEED = 2.5; // 헤엄 속도 (걷기보다 느긋하게)
+const SWIM_Y = WATER_Y - 1.0; // 헤엄칠 때 몸이 내려가는 깊이 (물이 가슴께까지 오게)
+const ZERO = { x: 0, z: 0 };
 
 // 캐릭터 설정 그림(docs/character-sheet.png)을 단순 도형으로 옮긴 아바타
 // 비율: 키 약 2.0, 머리 약 1/6.5. 관절: 엉덩이·무릎·어깨·팔꿈치
@@ -73,6 +76,35 @@ export class Avatar {
     };
     const AL = makeArm(-1), AR = makeArm(1);
     this.armL = AL.sh; this.elbowL = AL.el; this.armR = AR.sh; this.elbowR = AR.el;
+
+    // ---- 낚싯대 (낚시할 때만 오른손에 보여요, v0.48) ----
+    // 손에서 앞·위쪽으로 비스듬히 뻗은 가는 나무 막대. 끝(rodTip)에서 낚싯줄이 나가요.
+    this.rod = new THREE.Group();
+    this.rod.position.set(0, -0.22, 0.02);
+    this.rod.visible = false;
+    AR.el.add(this.rod);
+    const rodDir = new THREE.Vector3(0, -0.45, 0.89).normalize(), ROD_LEN = 1.55;
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.017, ROD_LEN, 6), M(P.wood, 0.15));
+    stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), rodDir);
+    stick.position.copy(rodDir.clone().multiplyScalar(ROD_LEN / 2 - 0.08));
+    stick.castShadow = true;
+    this.rod.add(stick);
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 10), M(P.woodDark || 0x8a6a4c, 0.15));
+    reel.rotation.z = Math.PI / 2; reel.position.copy(rodDir.clone().multiplyScalar(0.1)).add(new THREE.Vector3(0.03, 0, 0));
+    this.rod.add(reel);
+    this.rodTip = new THREE.Object3D();
+    this.rodTip.position.copy(rodDir.clone().multiplyScalar(ROD_LEN - 0.08));
+    this.rod.add(this.rodTip);
+
+    // ---- 헤엄칠 때 몸 둘레 물결 (v0.48) ----
+    // 몸이 물에 닿는 자리에 옅은 고리 하나 + 팔을 저을 때마다 퍼져 나가는 고리
+    const ringMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+    this.waterline = new THREE.Mesh(new THREE.RingGeometry(0.26, 0.34, 32), ringMat());
+    this.waterline.rotation.x = -Math.PI / 2;
+    this.waterline.visible = false;
+    this.root.add(this.waterline);
+    this.scene = scene;
+    this.ripples = [];
 
     // ---- 머리: 얼굴 + 볼륨 단발(물결 + 안으로 말린 끝) ----
     this.head = new THREE.Group();
@@ -187,6 +219,70 @@ export class Avatar {
       this.root.add(sp);
       return sp;
     });
+    this.rootY = 0;          // 몸 전체 높이 (헤엄칠 땐 물속으로 내려감)
+    this.swimming = false;   // 바다에서 헤엄치는 중
+    this.hop = null;         // 땅 ↔ 물로 폴짝 넘어가는 중
+    this.swimT = 0;
+    this.fishing = false;    // 낚싯대를 들고 있는 중 (fishing.js가 켜고 끔)
+    this.castT = 0;          // 낚싯대를 던지는 동작 남은 시간
+    this.reelT = 0;          // 낚싯대를 들어 올리는 동작 남은 시간
+    this.islandCenter = null; // 섬 한가운데가 지금 화면 기준 어디인지 (집 안에서 본 친구용). 없으면 (0,0)
+  }
+
+  // 바다 수영 (v0.49) -------------------------------------------------
+  // 원리: 섬 한가운데에서 떨어진 거리로 땅/바다를 나눠요.
+  //  · 땅에서 섬 테두리를 넘으면 → 바다 쪽으로 폴짝 뛰어들어 헤엄치기
+  //  · 헤엄치다 섬 가까이 오면 → 폴짝 올라가 다시 걷기
+  //  · 바다에도 끝이 있어서(SEA_RADIUS) 그 너머로는 더 나가지지 않아요
+  center() { return this.islandCenter ? this.islandCenter() : ZERO; }
+  inSea(x, z) { const c = this.center(); return Math.hypot(x - c.x, z - c.z) > PLOT_RADIUS + 0.2; }
+  startHop(toWater, x, z) {
+    const p = this.root.position;
+    this.hop = { t: 0, dur: toWater ? 0.55 : 0.6, x0: p.x, z0: p.z, y0: this.rootY, x1: x, z1: z, y1: toWater ? SWIM_Y : 0, toWater };
+    this.facing = Math.atan2(x - p.x, z - p.z); this.root.rotation.y = this.facing;
+    this.vy = 0; this.y = 0; this.running = false;
+  }
+  stepHop(dt) {
+    const h = this.hop, p = this.root.position;
+    h.t = Math.min(1, h.t + dt / h.dur);
+    const e = h.t * h.t * (3 - 2 * h.t);
+    p.x = lerp(h.x0, h.x1, e); p.z = lerp(h.z0, h.z1, e);
+    this.rootY = lerp(h.y0, h.y1, e) + Math.sin(Math.PI * h.t) * (h.toWater ? 0.6 : 0.9);
+    if (h.toWater && !h.splashed && this.rootY < WATER_Y - 0.3) { h.splashed = true; this.swimming = true; if (this.onSplash) this.onSplash(true); this.spawnRipple(p.x, p.z, 1.6); }
+    if (h.t >= 1) {
+      this.hop = null; this.swimming = h.toWater; this.rootY = h.y1;
+      if (!h.toWater && this.onStep) { this.onStep(); setTimeout(() => this.onStep && this.onStep(), 70); }
+    }
+  }
+  seaRules() {
+    const p = this.root.position, c = this.center();
+    const ox = p.x - c.x, oz = p.z - c.z, d = Math.hypot(ox, oz) || 0.0001, nx = ox / d, nz = oz / d;
+    const at = (r) => [c.x + nx * r, c.z + nz * r];
+    if (d > SEA_RADIUS) { [p.x, p.z] = at(SEA_RADIUS); if (this.swimming && this.onSeaEdge) this.onSeaEdge(); }
+    if (this.isGhost) { this.swimming = false; return; } // 유령은 물 위를 둥둥 떠서 건너요
+    if (!this.swimming) { if (d > PLOT_RADIUS + 0.2) this.startHop(true, ...at(PLOT_RADIUS + 1.5)); }
+    else if (d < PLOT_RADIUS + 1.0) this.startHop(false, ...at(PLOT_RADIUS - 0.7));
+  }
+  spawnRipple(x, z, size = 1) {
+    let r = this.ripples.find((q) => q.life <= 0);
+    if (!r) {
+      if (this.ripples.length >= 6) return;
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.36, 36), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2; this.scene.add(m);
+      r = { m, life: 0 }; this.ripples.push(r);
+    }
+    r.life = 1; r.size = size; r.m.visible = true;
+    r.m.position.set(x, WATER_Y + 0.04, z);
+  }
+  updateRipples(dt) {
+    this.ripples.forEach((r) => {
+      if (r.life <= 0) return;
+      r.life -= dt / 1.8;
+      const k = 1 - Math.max(0, r.life);
+      r.m.scale.setScalar(1 + k * 3.2 * r.size);
+      r.m.material.opacity = Math.max(0, r.life) * 0.32;
+      if (r.life <= 0) r.m.visible = false;
+    });
   }
 
   // ---- 가구 사용하기 (v0.49) ----
@@ -296,6 +392,7 @@ export class Avatar {
   }
 
   get position() { return this.root.position; }
+  dispose() { this.ripples.forEach((r) => this.scene.remove(r.m)); this.scene.remove(this.root); }
 
   // 유령 모습 (가입하지 않은 손님, v0.41): 사람 몸은 숨기고, 둥근 천을 쓴 작은 유령이 둥둥 떠다녀요.
   // 반짝이거나 빛나지 않게, 크림색에 살짝 비치는 정도로만.
@@ -338,7 +435,7 @@ export class Avatar {
   }
 
   moveTo(x, z) { this.target = new THREE.Vector2(x, z); }
-  jump() { if (this.y <= 0.001) this.vy = 5.2; }
+  jump() { if (this.y <= 0.001 && !this.swimming && !this.hop && !this.fishing) this.vy = 5.2; }
   wave() { this.waveT = 1.6; }
 
   update(dt, input, cameraYaw, colliders) {
@@ -360,8 +457,10 @@ export class Avatar {
       input = { x: 0, y: 0 }; colliders = [];
     }
 
+    if (this.hop) { this.stepHop(dt); input = { x: 0, y: 0 }; }
     // 키보드 이동 (카메라가 보는 방향 기준)
-    if (input.x || input.y) {
+    if (this.hop) { /* 폴짝 넘어가는 동안은 그대로 */ }
+    else if (input.x || input.y) {
       this.target = null;
       const fx = -Math.sin(cameraYaw), fz = -Math.cos(cameraYaw);
       const rx = Math.cos(cameraYaw), rz = -Math.sin(cameraYaw);
@@ -374,13 +473,14 @@ export class Avatar {
       dz = this.target.y - p.z;
       const len = Math.hypot(dx, dz);
       if (len < 0.08) { this.target = null; dx = dz = 0; }
-      else { const k = Math.min(1, len / ((this.running ? RUN_SPEED : SPEED) * dt)); dx = (dx / len) * k; dz = (dz / len) * k; }
+      else { const k = Math.min(1, len / (this.speedNow() * dt)); dx = (dx / len) * k; dz = (dz / len) * k; }
     }
 
     this.moving = dx !== 0 || dz !== 0;
     if (!this.moving) this.running = false; // 멈추면 다시 걷기로
     // 속도도 갑자기 바뀌지 않고 0.2초쯤에 걸쳐 붙었다 줄어듦
-    const wantSp = !this.moving ? SPEED * 0.4 : this.running ? RUN_SPEED : SPEED;
+    if (this.swimming) this.running = false; // 물에서는 달리지 않고 느긋하게
+    const wantSp = !this.moving ? SPEED * 0.4 : this.speedNow();
     this.curSpeed = lerp(this.curSpeed || SPEED * 0.5, wantSp, 1 - Math.exp(-dt * 9));
     if (this.moving) {
       const sp = this.curSpeed;
@@ -404,11 +504,9 @@ export class Avatar {
         if (this.target && Math.hypot(this.target.x - c.x, this.target.y - c.z) < min) this.target = null;
       }
     }
-    if (this.bounds) { const c = this.bounds(p.x, p.z); p.x = c.x; p.z = c.z; } // 집 안에서는 벽 안쪽까지만
-    else {
-      const lim = PLOT_RADIUS - 0.4, dc = Math.hypot(p.x, p.z);
-      if (dc > lim) { p.x *= lim / dc; p.z *= lim / dc; }
-    }
+    if (this.bounds) { const c = this.bounds(p.x, p.z); p.x = c.x; p.z = c.z; this.swimming = false; this.hop = null; this.rootY = 0; } // 집 안에서는 벽 안쪽까지만
+    else if (!this.hop) this.seaRules(); // 마당: 섬 밖은 바다 (헤엄치기)
+    this.root.position.y = this.rootY;
 
     // 점프
     this.vy -= 16 * dt;
@@ -422,7 +520,7 @@ export class Avatar {
     // 달리기: 몸을 앞으로 숙이고, 무릎을 크게 접고, 팔꿈치를 굽혀 힘차게 흔들며 통통 튐
     // 부드럽게 보이는 원리: ① 걷기↔달리기를 0~1 사이 값(runBlend)으로 천천히 섞고
     // ② 관절은 시간에 맞춘 '부드러운 따라가기'(sm)로 움직이고 ③ 골반·어깨가 살짝 엇갈려 비틀림
-    const walking = this.moving && this.y === 0;
+    const walking = this.moving && this.y === 0 && !this.swimming && !this.hop;
     const sm = (rate) => 1 - Math.exp(-dt * rate);
     this.runBlend = lerp(this.runBlend || 0, walking && this.running ? 1 : 0, sm(6));
     this.walkBlend = lerp(this.walkBlend || 0, walking ? 1 : 0, sm(10));
@@ -476,6 +574,61 @@ export class Avatar {
       this.armR.rotation.z = lerp(this.armR.rotation.z, 0.07 + Math.abs(s1) * 0.04 * wb - Math.sin(t * 1.9) * 0.01 * idle, sm(10));
       this.elbowR.rotation.x = lerp(this.elbowR.rotation.x, elbow, sm(10));
     }
+    this.swimPose(dt, sm);
+    this.fishPose(dt, sm);
+    this.updateRipples(dt);
+  }
+
+  speedNow() { return this.swimming ? SWIM_SPEED : this.running ? RUN_SPEED : SPEED; }
+
+  // 헤엄 동작: 팔을 앞으로 모았다가 옆으로 둥글게 젓는 평영. 가만히 있을 땐 팔을 살랑살랑 저으며 떠 있기
+  // 걷기 자세 위에 '얼마나 물에 있는지'(swimBlend) 만큼 섞어서, 들어가고 나올 때 자세가 부드럽게 바뀌어요
+  swimPose(dt, sm) {
+    const inWater = this.swimming || (this.hop && this.hop.toWater && this.hop.t > 0.5);
+    const sw = this.swimBlend = lerp(this.swimBlend || 0, inWater ? 1 : 0, sm(7));
+    const mv = this.swimMove = lerp(this.swimMove || 0, this.moving && this.swimming ? 1 : 0, sm(4));
+    this.waterline.visible = sw > 0.02;
+    if (sw < 0.002) return;
+    const prev = Math.sin(this.swimT);
+    this.swimT += dt * lerp(2.0, 4.6, mv);
+    const s = Math.sin(this.swimT), sweep = (s + 1) / 2;
+    if (this.swimming && prev < 0 && s >= 0) { // 팔을 한 번 저을 때마다 작은 물결
+      const p = this.root.position;
+      this.spawnRipple(p.x, p.z, lerp(0.5, 0.9, mv));
+      if (this.onStroke && mv > 0.4) this.onStroke();
+    }
+    const mix = (o, axis, v) => { o.rotation[axis] = lerp(o.rotation[axis], v, sw); };
+    const ax = lerp(-0.85 + sweep * 0.2, -1.45 + sweep * 0.3, mv), az = lerp(0.45 + sweep * 0.35, 0.2 + sweep * 1.0, mv);
+    const ex = lerp(-0.6, -0.25 - (1 - sweep) * 0.6, mv);
+    mix(this.armL, 'x', ax); mix(this.armL, 'z', -az); mix(this.elbowL, 'x', ex);
+    if (this.waveT <= 0) { mix(this.armR, 'x', ax); mix(this.armR, 'z', az); mix(this.elbowR, 'x', ex); } // 물에서도 손 흔들기는 돼요
+    const kick = Math.sin(this.swimT * 1.6) * lerp(0.25, 0.45, mv);
+    mix(this.legL, 'x', lerp(0.1, 0.5, mv) + kick); mix(this.legR, 'x', lerp(0.1, 0.5, mv) - kick);
+    mix(this.kneeL, 'x', 0.35); mix(this.kneeR, 'x', 0.35);
+    mix(this.body, 'x', 0.3 * mv); mix(this.body, 'z', 0);
+    mix(this.head, 'x', -0.3 * mv);
+    this.body.position.y = lerp(this.body.position.y, Math.sin(this.swimT * 2) * 0.03, sw); // 물에 둥둥
+    this.waterline.position.y = WATER_Y + 0.035 - this.rootY;
+    this.waterline.scale.setScalar(1 + mv * 0.35);
+    this.waterline.material.opacity = 0.3 * sw;
+  }
+
+  // 낚시 자세: 두 손으로 낚싯대를 앞으로 들고 서 있기. 던질 땐 머리 위로 올렸다가 앞으로 휙, 잡을 땐 위로 쑥
+  fishPose(dt, sm) {
+    const fb = this.fishBlend = lerp(this.fishBlend || 0, this.fishing ? 1 : 0, sm(8));
+    this.rod.visible = this.fishing || fb > 0.4;
+    if (fb < 0.002) return;
+    let ax = -0.95;
+    if (this.castT > 0) {
+      this.castT = Math.max(0, this.castT - dt);
+      const k = this.castT / 0.8; // 1 → 0
+      ax = k > 0.5 ? lerp(-0.95, -2.6, (1 - k) / 0.5) : lerp(-0.7, -2.6, k / 0.5);
+    }
+    if (this.reelT > 0) { this.reelT = Math.max(0, this.reelT - dt); ax = -0.95 - Math.sin((this.reelT / 0.7) * Math.PI) * 1.0; }
+    this.fishAx = lerp(this.fishAx ?? -0.95, ax, sm(16)); // 팔 높이는 부드럽게 따라가요
+    const mix = (o, axis, v) => { o.rotation[axis] = lerp(o.rotation[axis], v, fb); };
+    mix(this.armR, 'x', this.fishAx); mix(this.armR, 'z', 0.12); mix(this.elbowR, 'x', -0.45);
+    mix(this.armL, 'x', this.fishAx + 0.3); mix(this.armL, 'z', -0.42); mix(this.elbowL, 'x', -0.95);
   }
 
   // 유령: 땅에서 조금 떠서 천천히 오르내리고, 움직일 땐 진행 방향으로 살짝 기울어요
@@ -496,6 +649,9 @@ export class Avatar {
     if (this.pose) this.clearPose(true);
     this.unpose = null; this.lift = 0;
     this.root.position.set(s.x || 0, 0, s.z || 0);
+    this.hop = null;
+    this.swimming = !this.bounds && !this.isGhost && this.inSea(this.root.position.x, this.root.position.z);
+    this.rootY = this.swimming ? SWIM_Y : 0; this.root.position.y = this.rootY;
     this.facing = s.facing || 0;
     this.root.rotation.y = this.facing;
   }

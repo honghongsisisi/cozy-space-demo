@@ -43,10 +43,11 @@ const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export class Party {
-  constructor({ scene, camera, viewport, avatar, chat, roomId, role, ghost, getName, getRoom, getWorld, getInside, view, onWorld, onPeople, toast }) {
+  constructor({ scene, camera, viewport, avatar, chat, roomId, role, ghost, getName, getRoom, getWorld, getInside, view, onWorld, onPeople, toast, islandCenter }) {
     Object.assign(this, { scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast });
     this.ghost = !!ghost; // 가입하지 않은 손님(유령)인지. 친구 화면에도 유령 모습으로 보여요
     this.getInside = getInside || (() => false); // 내가 집 안에 있는지
+    this.islandCenter = islandCenter || null; // 섬 한가운데가 내 화면 기준 어디인지 (친구가 바다에서 헤엄치는지 알려고)
     this.getRoom = getRoom || (() => ''); // 내 섬 번호 (친구 신청·놀러 가기에 씀. 유령은 없음)
     // 친구 자리(친구 기준)를 내 화면 자리로 바꾸기. null이면 안 보임 (친구는 집 안, 나는 마당 → 지붕에 가려짐)
     this.view = view || ((x, z, f, pin) => (pin === this.getInside() ? { x, z, f } : null));
@@ -110,9 +111,9 @@ export class Party {
     const a = this.avatar;
     const pose = a.pose;
     const px = pose ? pose.x : a.position.x, pz = pose ? pose.z : a.position.z, pf = pose ? pose.facing : a.facing;
-    const s = { t: 'st', x: r2(px), z: r2(pz), f: r2(pf), r: a.running ? 1 : 0, s: this.getInside() ? 1 : 0 };
+    const s = { t: 'st', x: r2(px), z: r2(pz), f: r2(pf), r: a.running ? 1 : 0, s: this.getInside() ? 1 : 0, fi: a.fishing ? 1 : 0 };
     if (pose) { s.p = pose.kind; s.h = r2(pose.h || 0); }
-    const key = `${s.x},${s.z},${s.f},${s.r},${s.s},${s.p || ''}`;
+    const key = `${s.x},${s.z},${s.f},${s.r},${s.s},${s.fi},${s.p || ''}`;
     const now = performance.now();
     if (!force && key === this.lastSent.key && now - this.lastSent.t < 3000) return; // 그대로면 3초에 한 번만
     if (!force && now - this.lastSent.t < 160) return; // 움직여도 1초에 6번까지만
@@ -161,6 +162,7 @@ export class Party {
         p.tx = num(m.x, 30); p.tz = num(m.z, 30); p.f = num(m.f, 10); p.r = !!m.r;
         p.inside = !!m.s;
         p.pose = !p.ghost && POSES.has(m.p) ? m.p : ''; p.ph = num(m.h, 3);
+        p.av.fishing = !!m.fi; // 낚싯대를 든 모습 (찌·줄은 내 화면에만 그려요)
         if (!p.placed) { p.placed = true; p.jumpNext = true; }
         break;
       case 'act':
@@ -194,6 +196,7 @@ export class Party {
 
   addPeer(id, name, role) {
     const av = new Avatar(this.scene);
+    av.islandCenter = this.islandCenter;
     av.root.visible = false; // 위치를 받기 전에는 숨김
     const tag = this.makeTag(false, role === 'owner');
     tag.textContent = name;
@@ -209,7 +212,7 @@ export class Party {
   removePeer(id, said) {
     const p = this.peers.get(id);
     if (!p) return;
-    this.scene.remove(p.av.root);
+    p.av.dispose();
     p.tag.remove();
     this.chat.dropSpeaker && this.chat.dropSpeaker(id);
     this.peers.delete(id);
