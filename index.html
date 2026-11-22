@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nanum+Pen+Script&display=swap">
-  <link rel="stylesheet" href="style.css?v=0.41">
+  <link rel="stylesheet" href="style.css?v=0.42">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
@@ -106,6 +106,14 @@
       </div>
 
       <div id="party-wait" class="party-wait hidden"></div>
+      <!-- 친구 캐릭터를 누르면 뜨는 작은 카드 (v0.42) -->
+      <div id="peer-card" class="peer-card hidden">
+        <div class="peer-head"><b id="peer-name"></b><span id="peer-state"></span><button id="peer-close" class="icon-btn" title="닫기"><i data-icon="close"></i></button></div>
+        <div class="peer-actions">
+          <button id="peer-add" class="btn btn-accent">친구 신청</button>
+          <button id="peer-visit" class="btn"><i data-icon="home"></i>섬 구경 가기</button>
+        </div>
+      </div>
       <div id="fade" class="fade"><span id="fade-text"></span></div>
       <div id="toast"></div>
     </section>
@@ -174,18 +182,28 @@
             <p class="pane-note">놀러 온 손님은 섬 주인이 정한 이 시간과 날씨로 섬을 봐요. 바꾸려면 위쪽 시간·날씨 버튼을 누르세요.</p>
           </div>
           <button id="btn-respawn" class="wide-btn"><i data-icon="home"></i>처음 자리로 돌아가기</button>
-          <button class="wide-btn soon" data-soon="방명록"><i data-icon="book"></i>방명록 <em>준비 중</em></button>
+          <div class="info-card owner-only" id="ghost-card">
+            <div class="info-title">유령 손님</div>
+            <label class="switch"><input type="checkbox" id="ghost-toggle" checked><span></span>가입하지 않은 손님(유령)도 구경 오기</label>
+            <p class="pane-note">유령은 둥둥 떠다니며 구경만 해요. 말하기·방명록·물건 건드리기는 안 되고, 한 섬에 5명까지 들어와요.</p>
+          </div>
+          <button class="wide-btn" id="btn-gb-open"><i data-icon="book"></i>방명록 보기</button>
           <button class="wide-btn soon" data-soon="섬 넓히기"><i data-icon="compass"></i>섬 넓히기 <em>준비 중</em></button>
         </div>
 
         <!-- 친구 -->
         <div class="pane hidden" data-pane="friends">
-          <div class="info-card" id="invite-card">
-            <div class="info-title">친구 초대하기</div>
-            <p class="pane-note">아래 링크를 친구에게 보내면, 친구가 눌러서 내 섬에 놀러 와요. 내가 이 화면을 켜 둔 동안에만 들어올 수 있어요.</p>
-            <label class="name-field"><span>내 이름</span><input id="my-name" maxlength="10" placeholder="친구에게 보일 이름"></label>
-            <input id="invite-link" class="invite-link" readonly>
-            <button id="btn-invite" class="wide-btn accent"><i data-icon="link"></i>초대 링크 복사하기</button>
+          <div class="info-card hidden" id="friend-card">
+            <div class="info-title">친구 <span class="count" id="friend-count"></span></div>
+            <div id="friend-list" class="friend-list"></div>
+          </div>
+          <div class="info-card hidden" id="req-card">
+            <div class="info-title">받은 친구 신청</div>
+            <div id="req-list" class="friend-list"></div>
+          </div>
+          <div class="info-card hidden" id="sent-card">
+            <div class="info-title">보낸 친구 신청</div>
+            <div id="sent-list" class="friend-list"></div>
           </div>
           <div class="info-card hidden" id="guest-card">
             <div class="info-title">친구 섬에 놀러 왔어요</div>
@@ -196,9 +214,36 @@
             <div class="info-title">광장에 있어요</div>
             <p class="pane-note">누구나 오가며 만나는 곳이에요. 벤치에 모여 이야기 나눠요. 위쪽 '우리 집 가기'로 언제든 내 섬에 돌아가요.</p>
           </div>
+          <div class="info-card hidden" id="gb-card">
+            <div class="info-title" id="gb-title">방명록</div>
+            <div class="gb-write hidden" id="gb-write">
+              <textarea id="gb-input" maxlength="100" rows="2" placeholder="섬 주인에게 한마디 남겨요 (100자까지)"></textarea>
+              <div class="gb-write-foot"><span id="gb-left">0/100</span><button id="gb-send" class="btn btn-accent">남기기</button></div>
+            </div>
+            <p class="pane-note hidden" id="gb-ghost-note">가입하면 방명록을 남길 수 있어요.</p>
+            <div id="gb-list" class="gb-list"></div>
+          </div>
+          <div class="info-card hidden" id="recent-card">
+            <div class="info-title">다녀온 섬</div>
+            <div id="recent-list" class="recent-list"></div>
+          </div>
           <div class="info-card">
             <div class="info-title">지금 섬에 있는 사람</div>
             <div id="people-list" class="people-list"></div>
+          </div>
+          <div class="info-card account-only" id="code-card">
+            <div class="info-title">친구 코드</div>
+            <p class="pane-note">밖에서 아는 친구에게 내 코드를 알려 주거나, 친구 코드를 적어서 신청해요. 섬에서 만난 사람은 캐릭터를 눌러 바로 신청할 수 있어요.</p>
+            <label class="name-field"><span>내 별명</span><input id="my-name" maxlength="10" placeholder="친구에게 보일 이름"></label>
+            <div class="info-row"><span>내 코드</span><b id="my-code" class="code">------</b></div>
+            <div class="code-row"><input id="code-input" maxlength="6" placeholder="친구 코드 6글자" autocomplete="off"><button id="code-send" class="btn btn-accent">신청</button></div>
+          </div>
+          <p class="pane-note hidden" id="ghost-friend-note">가입하면 친구를 맺고, 친구 섬에 바로 놀러 갈 수 있어요.</p>
+          <div class="info-card account-only" id="invite-card">
+            <div class="info-title">초대 링크</div>
+            <p class="pane-note">아직 가입하지 않은 사람에게 보내요. 링크를 누르면 가입 없이 유령으로 구경하거나, 가입하고 들어올 수 있어요.</p>
+            <input id="invite-link" class="invite-link" readonly>
+            <button id="btn-invite" class="wide-btn accent"><i data-icon="link"></i>초대 링크 복사하기</button>
           </div>
           <p class="pane-note hidden" id="net-off">친구 초대는 서버 연결을 마친 뒤에 쓸 수 있어요. (준비 중)</p>
         </div>
@@ -234,7 +279,7 @@
         </div>
       </div>
       <button class="rail-btn" data-cat="manage"><i data-icon="sliders"></i>관리</button>
-      <span class="version" title="지금 보고 있는 버전">v0.41</span>
+      <span class="version" title="지금 보고 있는 버전">v0.42</span>
     </nav>
   </div>
 
@@ -314,6 +359,6 @@
 <div id="flash"></div>
 
 <script src="vendor/supabase.js?v=2.119.0"></script>
-<script type="module" src="js/main.js?v=0.41"></script>
+<script type="module" src="js/main.js?v=0.42"></script>
 </body>
 </html>

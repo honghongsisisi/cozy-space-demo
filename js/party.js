@@ -2,7 +2,7 @@
 // - 섬 주인이 초대 링크를 보내면, 친구가 그 링크로 같은 섬에 들어와요.
 // - 서로 걷고 뛰는 모습, 점프·인사, 채팅 말풍선이 보여요.
 // - 섬 꾸밈과 시간·날씨는 주인 것만 쓰고, 손님은 구경만 해요.
-// - 주인이 섬을 켜 둔 동안에만 들어올 수 있어요 (섬 꾸밈을 주인 화면이 직접 보내 주기 때문).
+// - v0.42부터 주인이 없어도 서버에 저장된 섬을 구경해요. 주인이 켜 두면 주인 화면이 보내 주는 지금 모습으로 바뀌어요.
 //
 // 주고받는 쪽지 종류 (t):
 //   hi    : 들어왔어요 (손님은 섬 꾸밈을 받을 때까지 3초마다 다시 보냄)
@@ -12,9 +12,9 @@
 //   world : 섬 꾸밈·이름·시간·날씨 (주인만 보냄)
 //   bye   : 나가요
 import * as THREE from 'three';
-import { Avatar } from './avatar.js?v=0.41';
-import { PRESETS } from './chat.js?v=0.41';
-import { openLink, netConfigured } from './net.js?v=0.41';
+import { Avatar } from './avatar.js?v=0.42';
+import { PRESETS } from './chat.js?v=0.42';
+import { openLink, netConfigured } from './net.js?v=0.42';
 
 const ROOM_KEY = 'cozy-space-demo:room';
 const NAME_KEY = 'cozy-space-demo:name';
@@ -41,10 +41,11 @@ const num = (v, lim = 100) => { v = Number(v); return Number.isFinite(v) ? Math.
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export class Party {
-  constructor({ scene, camera, viewport, avatar, chat, roomId, role, ghost, getName, getWorld, getInside, view, onWorld, onPeople, toast }) {
+  constructor({ scene, camera, viewport, avatar, chat, roomId, role, ghost, getName, getRoom, getWorld, getInside, view, onWorld, onPeople, toast }) {
     Object.assign(this, { scene, camera, viewport, avatar, chat, roomId, role, getName, getWorld, onWorld, onPeople, toast });
     this.ghost = !!ghost; // 가입하지 않은 손님(유령)인지. 친구 화면에도 유령 모습으로 보여요
     this.getInside = getInside || (() => false); // 내가 집 안에 있는지
+    this.getRoom = getRoom || (() => ''); // 내 섬 번호 (친구 신청·놀러 가기에 씀. 유령은 없음)
     // 친구 자리(친구 기준)를 내 화면 자리로 바꾸기. null이면 안 보임 (친구는 집 안, 나는 마당 → 지붕에 가려짐)
     this.view = view || ((x, z, f, pin) => (pin === this.getInside() ? { x, z, f } : null));
     this.id = randId(8); // 이 창의 이름표 (창마다 다름)
@@ -98,7 +99,7 @@ export class Party {
 
   send(msg) {
     if (!this.link || !this.connected) return;
-    this.link.send({ ...msg, id: this.id, name: this.getName(), role: this.role, g: this.ghost ? 1 : 0 });
+    this.link.send({ ...msg, id: this.id, name: this.getName(), role: this.role, g: this.ghost ? 1 : 0, rm: this.ghost ? '' : this.getRoom() });
   }
 
   sayHi() { this.send({ t: 'hi' }); this.sendState(true); }
@@ -144,6 +145,8 @@ export class Party {
     p.last = performance.now();
     if (!!m.g !== p.ghost) { p.ghost = !!m.g; p.av.setGhost(p.ghost); this.peopleChanged(); }
     if (p.name !== name) { p.name = name; p.tag.textContent = name; this.peopleChanged(); }
+    const rm = typeof m.rm === 'string' && /^[a-z0-9]{1,16}$/.test(m.rm) && !m.g ? m.rm : '';
+    if (rm !== p.room) { p.room = rm; this.peopleChanged(); }
     switch (m.t) {
       case 'hi':
         this.sendState(true);
@@ -176,6 +179,7 @@ export class Party {
             items: clean(m.items),
             house: clean(m.house),
             env: m.env && typeof m.env === 'object' ? { time: num(m.env.time, 24), weather: String(m.env.weather || 'clear'), realTime: !!m.env.realTime, flowing: false } : null,
+            ghosts: m.ghosts !== false, // 섬 주인이 유령 손님을 받는지 (v0.42)
           }, first);
         }
         break;
@@ -188,10 +192,10 @@ export class Party {
     const tag = this.makeTag(false, role === 'owner');
     tag.textContent = name;
     tag.style.display = 'none';
-    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false, inside: false, ghost: false };
+    const p = { id, name, role, av, tag, tx: 0, tz: 3, f: 0, r: false, last: performance.now(), placed: false, inside: false, ghost: false, room: '' };
     this.peers.set(id, p);
     if (role === 'owner') this.ownerHere = true;
-    if (this.role !== 'visitor' || this.peers.size < 8) this.toast(this.role === 'visitor' ? `${name}님이 광장에 왔어요` : role === 'owner' && this.role === 'guest' ? `${name}님의 섬에 들어왔어요` : `${name}님이 놀러 왔어요`);
+    if (this.role !== 'visitor' || this.peers.size < 8) this.toast(this.role === 'visitor' ? `${name}님이 광장에 왔어요` : role === 'owner' && this.role === 'guest' ? `섬 주인 ${name}님이 여기 있어요` : `${name}님이 놀러 왔어요`);
     this.peopleChanged();
     return p;
   }
@@ -213,12 +217,23 @@ export class Party {
   }
 
   peopleChanged() {
-    const list = [{ name: this.getName(), role: this.role, me: true, ghost: this.ghost }, ...[...this.peers.values()].map((p) => ({ name: p.name, role: p.role, ghost: p.ghost }))];
+    const list = [{ name: this.getName(), role: this.role, me: true, ghost: this.ghost }, ...[...this.peers.values()].map((p) => ({ id: p.id, name: p.name, role: p.role, ghost: p.ghost, room: p.room }))];
     this.onPeople(list);
   }
 
   // 채팅: 내 화면에는 원래대로 뜨고, 같은 공간 사람들에게도 보냄 (main.js에서 불러 줌)
   sendChat(msg) { this.send({ t: 'chat', text: msg.text, preset: this.chat.preset }); }
+
+  // 화면을 누른 자리에 있는 친구 캐릭터 (없으면 null)
+  pickPeer(raycaster) {
+    let best = null, bestD = Infinity;
+    this.peers.forEach((p) => {
+      if (!p.placed || !p.av.root.visible) return;
+      const hit = raycaster.intersectObject(p.av.root, true)[0];
+      if (hit && hit.distance < bestD) { best = p; bestD = hit.distance; }
+    });
+    return best;
+  }
 
   headOf(id) {
     const p = this.peers.get(id);

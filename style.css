@@ -428,3 +428,53 @@ body.ghost #btn-save, body.ghost #btn-title-edit, body.ghost #invite-card, body.
 .btn-ghost-join { font-weight: 700; color: #7a6a4f; background: #f6efe1; border-color: #eadfca; }
 .btn-ghost-join .ico { color: #a08a62; }
 body.ghost .chat-input:disabled { background: #f4f1ec; color: var(--muted); }
+
+/* 방명록 · 다녀온 섬 (v0.42) */
+body:not([data-space="home"]) .owner-only { display: none; }
+.gb-write { display: grid; gap: 5px; }
+.gb-write textarea {
+  width: 100%; box-sizing: border-box; resize: none; border: 1px solid var(--line); background: #fff; border-radius: var(--r-btn);
+  padding: 8px 10px; font: inherit; font-size: 13px; line-height: 1.5; color: var(--ink);
+}
+.gb-write-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); }
+.gb-write-foot .btn { padding: 5px 14px; }
+.gb-list { display: grid; gap: 5px; max-height: 320px; overflow-y: auto; }
+.gb-item { background: #fff; border-radius: 9px; padding: 7px 9px; display: grid; gap: 3px; }
+.gb-item p { margin: 0; font-size: 13px; line-height: 1.55; word-break: break-all; white-space: pre-wrap; }
+.gb-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.gb-meta b { color: var(--ink); font-weight: 600; font-size: 11.5px; }
+.gb-meta button { margin-left: auto; border: none; background: none; color: var(--muted); font-size: 11px; padding: 0 2px; cursor: pointer; }
+.gb-meta button:hover { color: var(--danger); }
+.gb-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 8px 0 4px; }
+.recent-list { display: grid; gap: 5px; }
+.recent-list .wide-btn { padding: 8px 10px; font-size: 13px; }
+.recent-list .wide-btn em { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 친구 맺기 (v0.42) */
+body.ghost .account-only { display: none; }
+.info-title .count { color: var(--muted); font-weight: 500; margin-left: 2px; }
+.friend-list { display: grid; gap: 5px; max-height: 300px; overflow-y: auto; }
+.friend-row { display: flex; align-items: center; gap: 7px; background: #fff; border-radius: 9px; padding: 6px 8px 6px 10px; }
+.friend-row .who { display: grid; min-width: 0; flex: 1; }
+.friend-row .who b { font-weight: 600; font-size: 13px; }
+.friend-row .who span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-row .btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.friend-row .quiet { border: none; background: none; color: var(--muted); font-size: 11px; padding: 2px 4px; cursor: pointer; white-space: nowrap; }
+.friend-row .quiet:hover { color: var(--danger); }
+.friend-empty { font-size: 12px; color: var(--muted); line-height: 1.6; padding: 2px 0; }
+.code { letter-spacing: 0.12em; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.code-row { display: flex; gap: 6px; }
+.code-row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: #fff; border-radius: var(--r-btn); padding: 7px 10px; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+.code-row .btn { padding: 6px 14px; }
+.person-row .btn { margin-left: auto; padding: 3px 9px; font-size: 11.5px; }
+.person-row em + .btn, .person-row span + .btn { margin-left: auto; }
+.peer-card {
+  position: absolute; top: 52px; left: 50%; transform: translateX(-50%); z-index: 4; min-width: 220px; max-width: calc(100% - 32px);
+  background: rgba(255, 253, 249, 0.96); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px; display: grid; gap: 8px;
+}
+.peer-head { display: flex; align-items: center; gap: 7px; }
+.peer-head b { font-size: 14px; }
+.peer-head span { font-size: 11.5px; color: var(--muted); }
+.peer-head .icon-btn { margin-left: auto; }
+.peer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.peer-actions .btn { flex: 1; justify-content: center; white-space: nowrap; }
